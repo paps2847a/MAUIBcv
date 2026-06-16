@@ -24,40 +24,57 @@ public class MainPage : ContentPage
         // Configuración de la barra de navegación en Shell
         Shell.SetNavBarIsVisible(this, false);
 
-        Content = new ScrollView
+        // Grid principal para permitir superponer la animación de carga (blur/overlay)
+        Content = new Grid
         {
-            Content = new VerticalStackLayout
+            Children =
             {
-                Spacing = 24,
-                Padding = new Thickness(24, 48, 24, 24),
-                Children =
+                // 1. CONTENIDO PRINCIPAL
+                new ScrollView
                 {
-                    // 1. ENCABEZADO
-                    CreateHeader(),
+                    Content = new VerticalStackLayout
+                    {
+                        Spacing = 24,
+                        Padding = new Thickness(24, 48, 24, 24),
+                        Children =
+                        {
+                            // ENCABEZADO
+                            CreateHeader(),
 
-                    // 2. BANNER DE ESTADO
-                    CreateStatusBanner(),
+                            // BANNER DE ESTADO HISTÓRICO
+                            CreateStatusBanner(),
 
-                    // 3. TARJETAS DE TASAS ACTUALES
-                    CreateRatesGrid(),
+                            // TARJETAS DE TASAS ACTUALES
+                            CreateRatesGrid(),
 
-                    // 4. CONSULTA HISTÓRICA (DATE PICKER)
-                    CreateDatePickerSection(),
+                            // CONSULTA HISTÓRICA (DATE PICKER)
+                            CreateDatePickerSection(),
 
-                    // 5. CONVERSOR DE MONEDAS
-                    CreateConverterSection(),
+                            // CONVERSOR DE MONEDAS
+                            CreateConverterSection(),
 
-                    // 6. HISTORIAL DE TASAS (TABLA / LISTA)
-                    CreateHistorySection()
+                            // HISTORIAL DE TASAS (TABLA / LISTA)
+                            CreateHistorySection()
+                        }
+                    }
                 }
+                .Bind(ScrollView.OpacityProperty, "State.IsBusy", convert: (bool isBusy) => isBusy ? 0.35 : 1.0)
+                .Bind(ScrollView.IsEnabledProperty, "State.IsBusy", convert: (bool isBusy) => !isBusy),
+
+                // 2. OVERLAY DE CARGA (DIFUMINACIÓN Y SPINNER CENTRAL)
+                CreateLoadingOverlay()
             }
         };
     }
 
-    protected override async void OnAppearing()
+    protected override void OnAppearing()
     {
         base.OnAppearing();
-        await _store.InitializeAsync();
+        // Deferir la inicialización para permitir que la UI se dibuje instantáneamente al iniciar
+        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
+        {
+            Task.Run(async () => await _store.InitializeAsync());
+        });
     }
 
     // --- Componentes Visuales ---
@@ -414,5 +431,48 @@ public class MainPage : ContentPage
                 }
             }
         };
+    }
+
+    // Capa de carga que difumine levemente el contenido y muestra el spinner central
+    private View CreateLoadingOverlay()
+    {
+        return new Grid
+        {
+            // Fondo semitransparente que simula un difuminado sutil
+            BackgroundColor = Color.FromRgba(248, 250, 252, 160), // slate-50 con opacidad del 63%
+            InputTransparent = false, // Bloquea clics en los elementos de fondo
+            HorizontalOptions = LayoutOptions.Fill,
+            VerticalOptions = LayoutOptions.Fill,
+            Children =
+            {
+                new VerticalStackLayout
+                {
+                    Spacing = 16,
+                    HorizontalOptions = LayoutOptions.Center,
+                    VerticalOptions = LayoutOptions.Center,
+                    Children =
+                    {
+                        new ActivityIndicator
+                        {
+                            Color = Color.FromArgb("#0F172A"),
+                            HeightRequest = 44,
+                            WidthRequest = 44,
+                            HorizontalOptions = LayoutOptions.Center
+                        }
+                        .Bind(ActivityIndicator.IsRunningProperty, "State.IsBusy"),
+
+                        new Label
+                        {
+                            TextColor = Color.FromArgb("#334155"),
+                            FontSize = 13,
+                            FontAttributes = FontAttributes.Bold,
+                            HorizontalTextAlignment = TextAlignment.Center
+                        }
+                        .Bind(Label.TextProperty, "State.StatusMessage")
+                    }
+                }
+            }
+        }
+        .Bind(Grid.IsVisibleProperty, "State.IsBusy");
     }
 }

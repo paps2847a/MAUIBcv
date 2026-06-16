@@ -14,7 +14,7 @@ public record ChangeAmount(string Amount) : BcvMsg;
 public record ToggleDirection : BcvMsg;
 
 // Mensajes del sistema (Efectos)
-public record LoadingStarted : BcvMsg;
+public record LoadingStarted(string StatusMessage = "Cargando...") : BcvMsg;
 public record RatesLoaded(double UsdRate, double EurRate, DateTime Date, string StatusMessage) : BcvMsg;
 public record RatesFailed(string StatusMessage, double? UsdRate, double? EurRate, DateTime? Date) : BcvMsg;
 public record HistoryLoaded(IReadOnlyList<ExchangeRate> History) : BcvMsg;

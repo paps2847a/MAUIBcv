@@ -4,8 +4,10 @@ using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using BcvExchangeApp.Data;
 using BcvExchangeApp.Models;
 using BcvExchangeApp.Services;
@@ -15,23 +17,35 @@ namespace BcvExchangeApp.Store;
 public class BcvStore : INotifyPropertyChanged
 {
     private readonly BcvScraperService _scraperService;
-    private readonly BcvDbContext _dbContext;
+    private readonly IServiceProvider _serviceProvider;
     private BcvState _state;
+
+    // Control de concurrencia para evitar accesos simultáneos a EF Core
+    private readonly SemaphoreSlim _dbSemaphore = new(1, 1);
+    private bool _isInitialized = false;
+    private readonly object _initLock = new();
 
     public BcvState State => _state;
 
-    public BcvStore(BcvScraperService scraperService, BcvDbContext dbContext)
+    // Inyectamos IServiceProvider para resolver BcvDbContext de forma diferida (lazy)
+    // Esto evita cargar las librerías de Entity Framework Core durante el constructor de MainPage al iniciar la app
+    public BcvStore(BcvScraperService scraperService, IServiceProvider serviceProvider)
     {
         _scraperService = scraperService;
-        _dbContext = dbContext;
+        _serviceProvider = serviceProvider;
         _state = GetInitialState();
+    }
+
+    private BcvDbContext GetDbContext()
+    {
+        return _serviceProvider.GetRequiredService<BcvDbContext>();
     }
 
     private static BcvState GetInitialState()
     {
         return new BcvState(
-            IsBusy: false,
-            StatusMessage: "Iniciando aplicación...",
+            IsBusy: true,
+            StatusMessage: "Conectando al Banco Central...",
             UsdRate: 0,
             EurRate: 0,
             SelectedDate: DateTime.Today,
@@ -47,26 +61,50 @@ public class BcvStore : INotifyPropertyChanged
     // Inicializar base de datos y cargar primer estado
     public async Task InitializeAsync()
     {
-        await _dbContext.Database.EnsureCreatedAsync();
-        await LoadHistoryEffectAsync();
-        await FetchRatesEffectAsync(); // Primer scraping en segundo plano al abrir la app
+        lock (_initLock)
+        {
+            if (_isInitialized) return;
+            _isInitialized = true;
+        }
+
+        try
+        {
+            await _dbSemaphore.WaitAsync();
+            try
+            {
+                var dbContext = GetDbContext();
+                await dbContext.Database.EnsureCreatedAsync();
+            }
+            finally
+            {
+                _dbSemaphore.Release();
+            }
+
+            await LoadHistoryEffectAsync();
+            await FetchRatesEffectAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error durante la inicialización: {ex.Message}");
+            Dispatch(new RatesFailed($"Error de inicialización: {ex.Message}", null, null, null));
+        }
     }
 
     // --- Despachador de Mensajes (El corazón de MVU) ---
     public void Dispatch(BcvMsg msg)
     {
-        // Ejecutar en el hilo principal de UI para evitar problemas de binding y asegurar consistencia
-        MainThread.BeginInvokeOnMainThread(async () =>
+        MainThread.BeginInvokeOnMainThread(() =>
         {
             var oldState = _state;
-            
-            // 1. Reducir el mensaje original para actualizar la fecha/valores inmediatamente
             var newState = Reduce(oldState, msg);
 
-            // 2. Si el mensaje inicia una acción asíncrona, aplicar el estado de carga sobre el nuevo estado
-            if (msg is FetchLatestRates || msg is SelectDate)
+            if (msg is FetchLatestRates)
             {
-                newState = Reduce(newState, new LoadingStarted());
+                newState = Reduce(newState, new LoadingStarted("Conectando al Banco Central..."));
+            }
+            else if (msg is SelectDate sd)
+            {
+                newState = Reduce(newState, new LoadingStarted($"Buscando tasas para el {sd.Date:dd/MM/yyyy}..."));
             }
 
             if (newState != oldState)
@@ -75,14 +113,13 @@ public class BcvStore : INotifyPropertyChanged
                 OnPropertyChanged(nameof(State));
             }
 
-            // 3. Ejecutar efectos secundarios asincrónicos
             switch (msg)
             {
                 case FetchLatestRates:
-                    await FetchRatesEffectAsync();
+                    Task.Run(FetchRatesEffectAsync);
                     break;
                 case SelectDate sd:
-                    await LoadRatesForDateEffectAsync(sd.Date);
+                    Task.Run(() => LoadRatesForDateEffectAsync(sd.Date));
                     break;
             }
         });
@@ -93,8 +130,8 @@ public class BcvStore : INotifyPropertyChanged
     {
         switch (msg)
         {
-            case LoadingStarted:
-                return state with { IsBusy = true, StatusMessage = "Conectando al Banco Central..." };
+            case LoadingStarted ls:
+                return state with { IsBusy = true, StatusMessage = ls.StatusMessage };
 
             case SelectDate sd:
                 return state with
@@ -150,7 +187,6 @@ public class BcvStore : INotifyPropertyChanged
         }
     }
 
-    // --- Lógica del Conversor integrada en la transición de estado ---
     private BcvState Recalculate(BcvState state)
     {
         if (string.IsNullOrWhiteSpace(state.AmountText))
@@ -186,17 +222,28 @@ public class BcvStore : INotifyPropertyChanged
 
     private async Task FetchRatesEffectAsync()
     {
+        ExchangeRate? scraped = null;
         try
         {
-            var scraped = await _scraperService.ScrapeRatesAsync();
+            scraped = await _scraperService.ScrapeRatesAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error de scraping BCV: {ex.Message}");
+        }
+
+        await _dbSemaphore.WaitAsync();
+        try
+        {
+            var dbContext = GetDbContext();
             if (scraped != null)
             {
-                var existing = await _dbContext.ExchangeRates
+                var existing = await dbContext.ExchangeRates
                     .FirstOrDefaultAsync(e => e.Date == scraped.Date);
 
                 if (existing == null)
                 {
-                    _dbContext.ExchangeRates.Add(scraped);
+                    dbContext.ExchangeRates.Add(scraped);
                 }
                 else
                 {
@@ -204,9 +251,9 @@ public class BcvStore : INotifyPropertyChanged
                     existing.EurRate = scraped.EurRate;
                     existing.CreatedAt = DateTime.Now;
                 }
-                await _dbContext.SaveChangesAsync();
+                await dbContext.SaveChangesAsync();
 
-                var newHistory = await _dbContext.ExchangeRates
+                var newHistory = await dbContext.ExchangeRates
                     .OrderByDescending(e => e.Date)
                     .Take(15)
                     .ToListAsync();
@@ -219,43 +266,49 @@ public class BcvStore : INotifyPropertyChanged
                     $"Tasas actualizadas desde el BCV (Fecha Valor: {scraped.Date:dd/MM/yyyy})."
                 ));
             }
+            else
+            {
+                var today = DateTime.Today;
+                var todayRate = await dbContext.ExchangeRates
+                    .FirstOrDefaultAsync(e => e.Date == today);
+
+                if (todayRate != null)
+                {
+                    Dispatch(new RatesLoaded(
+                        todayRate.UsdRate,
+                        todayRate.EurRate,
+                        todayRate.Date,
+                        "Sin conexión. Mostrando tasas guardadas para el día de hoy."
+                    ));
+                }
+                else
+                {
+                    Dispatch(new RatesFailed(
+                        "Sin conexión. No se encontraron tasas registradas para el día de hoy.",
+                        0, 0, today
+                    ));
+                }
+            }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Error de conexión o timeout en efecto MVU: {ex.Message}");
-            
-            // Verificamos si existe un registro local con la fecha del día que transcurre (hoy)
-            var today = DateTime.Today;
-            var todayRate = await _dbContext.ExchangeRates
-                .FirstOrDefaultAsync(e => e.Date == today);
-
-            if (todayRate != null)
-            {
-                // De existir, se muestran los precios guardados para hoy
-                Dispatch(new RatesLoaded(
-                    todayRate.UsdRate,
-                    todayRate.EurRate,
-                    todayRate.Date,
-                    "Sin conexión. Mostrando tasas guardadas para el día de hoy."
-                ));
-            }
-            else
-            {
-                // De no existir, se le indica al usuario la falta de datos para el día actual
-                Dispatch(new RatesFailed(
-                    "Sin conexión. No se encontraron tasas registradas para el día de hoy.",
-                    0, 0, today
-                ));
-            }
+            System.Diagnostics.Debug.WriteLine($"Error en base de datos: {ex.Message}");
+            Dispatch(new RatesFailed($"Error de base de datos: {ex.Message}", null, null, null));
+        }
+        finally
+        {
+            _dbSemaphore.Release();
         }
     }
 
     private async Task LoadRatesForDateEffectAsync(DateTime date)
     {
+        await _dbSemaphore.WaitAsync();
         try
         {
+            var dbContext = GetDbContext();
             var targetDate = date.Date;
-            var rate = await _dbContext.ExchangeRates
+            var rate = await dbContext.ExchangeRates
                 .FirstOrDefaultAsync(e => e.Date == targetDate);
 
             if (rate != null)
@@ -271,7 +324,7 @@ public class BcvStore : INotifyPropertyChanged
             {
                 Dispatch(new RatesFailed(
                     $"No hay datos guardados para el {date:dd/MM/yyyy}. Presiona Refrescar para intentar buscar online.",
-                    0, 0, date // Asignar 0 limpia las tasas antiguas para evitar inconsistencias en UI
+                    0, 0, date
                 ));
             }
         }
@@ -279,13 +332,19 @@ public class BcvStore : INotifyPropertyChanged
         {
             Dispatch(new RatesFailed($"Error al buscar tasa histórica: {ex.Message}", null, null, null));
         }
+        finally
+        {
+            _dbSemaphore.Release();
+        }
     }
 
     private async Task LoadHistoryEffectAsync()
     {
+        await _dbSemaphore.WaitAsync();
         try
         {
-            var historyList = await _dbContext.ExchangeRates
+            var dbContext = GetDbContext();
+            var historyList = await dbContext.ExchangeRates
                 .OrderByDescending(e => e.Date)
                 .Take(15)
                 .ToListAsync();
@@ -295,6 +354,10 @@ public class BcvStore : INotifyPropertyChanged
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"Error al cargar historial: {ex.Message}");
+        }
+        finally
+        {
+            _dbSemaphore.Release();
         }
     }
 
