@@ -8,6 +8,7 @@ namespace BcvExchangeApp.Data;
 public class BcvDbContext : DbContext
 {
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
+    public DbSet<PagoMovilRecord> PagoMovilRecords => Set<PagoMovilRecord>();
 
     public BcvDbContext()
     {

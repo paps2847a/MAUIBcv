@@ -5,7 +5,7 @@ using Microsoft.Maui.Controls;
 using Microsoft.Maui.Controls.Shapes;
 using Microsoft.Maui.Graphics;
 using CommunityToolkit.Maui.Markup;
-using BcvExchangeApp.Store;
+using BcvExchangeApp.ViewModels;
 using BcvExchangeApp.Models;
 using static CommunityToolkit.Maui.Markup.GridRowsColumns;
 
@@ -13,18 +13,18 @@ namespace BcvExchangeApp;
 
 public class MainPage : ContentPage
 {
-    private readonly BcvStore _store;
+    private readonly MainViewModel _viewModel;
 
-    public MainPage(BcvStore store)
+    public MainPage(MainViewModel viewModel)
     {
-        _store = store;
-        BindingContext = _store;
-        BackgroundColor = Color.FromArgb("#F8FAFC"); // Fondo claro y limpio slate-50
+        _viewModel = viewModel;
+        BindingContext = _viewModel;
+        BackgroundColor = Color.FromArgb("#F8FAFC"); // Fondo claro slate-50
 
-        // Configuración de la barra de navegación en Shell
+        // Ocultar la barra de navegación del Shell
         Shell.SetNavBarIsVisible(this, false);
 
-        // Grid principal para permitir superponer la animación de carga (blur/overlay)
+        // Layout principal que superpone el contenido y la capa de carga
         Content = new Grid
         {
             Children =
@@ -38,30 +38,19 @@ public class MainPage : ContentPage
                         Padding = new Thickness(24, 48, 24, 24),
                         Children =
                         {
-                            // ENCABEZADO
                             CreateHeader(),
-
-                            // BANNER DE ESTADO HISTÓRICO
                             CreateStatusBanner(),
-
-                            // TARJETAS DE TASAS ACTUALES
                             CreateRatesGrid(),
-
-                            // CONSULTA HISTÓRICA (DATE PICKER)
                             CreateDatePickerSection(),
-
-                            // CONVERSOR DE MONEDAS
                             CreateConverterSection(),
-
-                            // HISTORIAL DE TASAS (TABLA / LISTA)
                             CreateHistorySection()
                         }
                     }
                 }
-                .Bind(ScrollView.OpacityProperty, "State.IsBusy", convert: (bool isBusy) => isBusy ? 0.35 : 1.0)
-                .Bind(ScrollView.IsEnabledProperty, "State.IsBusy", convert: (bool isBusy) => !isBusy),
+                .Bind(ScrollView.OpacityProperty, nameof(MainViewModel.IsBusy), convert: (bool isBusy) => isBusy ? 0.35 : 1.0)
+                .Bind(ScrollView.IsEnabledProperty, nameof(MainViewModel.IsBusy), convert: (bool isBusy) => !isBusy),
 
-                // 2. OVERLAY DE CARGA (DIFUMINACIÓN Y SPINNER CENTRAL)
+                // 2. CAPA DE CARGA (DIFUMINADO + SPINNER)
                 CreateLoadingOverlay()
             }
         };
@@ -70,22 +59,40 @@ public class MainPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        // Deferir la inicialización para permitir que la UI se dibuje instantáneamente al iniciar
+        // Inicializar de forma diferida tras pintar la UI inicial para evitar ANRs en arranque
         Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
         {
-            Task.Run(async () => await _store.InitializeAsync());
+            Task.Run(async () => await _viewModel.InitializeAsync());
         });
     }
 
-    // --- Componentes Visuales ---
+    // --- Componentes de la Interfaz ---
 
     private View CreateHeader()
     {
         return new Grid
         {
-            ColumnDefinitions = Columns.Define(Star, Auto),
+            ColumnDefinitions = Columns.Define(Auto, Star, Auto),
+            ColumnSpacing = 12,
             Children =
             {
+                // Botón del Menú Desplegable (Flyout)
+                new Button
+                {
+                    Text = "☰",
+                    FontSize = 20,
+                    FontAttributes = FontAttributes.Bold,
+                    TextColor = Color.FromArgb("#0F172A"),
+                    BackgroundColor = Colors.Transparent,
+                    BorderWidth = 0,
+                    Padding = 0,
+                    HeightRequest = 40,
+                    WidthRequest = 40,
+                    Command = new Command(() => Shell.Current.FlyoutIsPresented = true)
+                }
+                .Column(0)
+                .CenterVertical(),
+
                 new VerticalStackLayout
                 {
                     Spacing = 4,
@@ -103,25 +110,25 @@ public class MainPage : ContentPage
                             FontSize = 13,
                             TextColor = Color.FromArgb("#64748B") // slate-500
                         }
-                        .Bind(Label.TextProperty, "State.FormattedDate", stringFormat: "Fecha Valor: {0}")
+                        .Bind(Label.TextProperty, nameof(MainViewModel.FormattedDate), stringFormat: "Fecha Valor: {0}")
                     }
                 }
-                .Column(0),
+                .Column(1)
+                .CenterVertical(),
 
                 new Button
                 {
                     Text = "Actualizar",
                     FontAttributes = FontAttributes.Bold,
                     TextColor = Colors.White,
-                    BackgroundColor = Color.FromArgb("#0F172A"), // Contraste oscuro minimalista
-                    CornerRadius = 15, // Totalmente ovalado
+                    BackgroundColor = Color.FromArgb("#0F172A"),
+                    CornerRadius = 15,
                     Padding = new Thickness(14, 0),
-                    HeightRequest = 30, // Reducido
+                    HeightRequest = 30,
                     FontSize = 11,
-                    Margin = new Thickness(16, 0, 0, 0), // Separado para evitar amontonamiento
-                    Command = new Command(() => _store.Dispatch(new FetchLatestRates()))
+                    Command = _viewModel.FetchLatestRatesCommand
                 }
-                .Column(1)
+                .Column(2)
                 .CenterVertical()
             }
         };
@@ -132,7 +139,7 @@ public class MainPage : ContentPage
         return new Border
         {
             StrokeShape = new RoundRectangle { CornerRadius = 6 },
-            Stroke = Color.FromArgb("#E2E8F0"), // Gris slate-200
+            Stroke = Color.FromArgb("#E2E8F0"), // slate-200
             StrokeThickness = 1,
             BackgroundColor = Colors.White,
             Padding = new Thickness(16, 12),
@@ -142,9 +149,9 @@ public class MainPage : ContentPage
                 FontSize = 12,
                 LineBreakMode = LineBreakMode.WordWrap
             }
-            .Bind(Label.TextProperty, "State.StatusMessage")
+            .Bind(Label.TextProperty, nameof(MainViewModel.StatusMessage))
         }
-        .Bind(Border.IsVisibleProperty, "State.StatusMessage", 
+        .Bind(Border.IsVisibleProperty, nameof(MainViewModel.StatusMessage), 
             convert: (string? msg) => !string.IsNullOrEmpty(msg));
     }
 
@@ -171,7 +178,7 @@ public class MainPage : ContentPage
                         {
                             new Label { Text = "DOLAR (USD)", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#64748B") },
                             new Label { FontSize = 22, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
-                                .Bind(Label.TextProperty, "State.UsdRate", stringFormat: "{0:N4} VES"),
+                                .Bind(Label.TextProperty, nameof(MainViewModel.UsdRate), stringFormat: "{0:N4} VES"),
                             new Label { Text = "Banco Central de Venezuela", FontSize = 9, TextColor = Color.FromArgb("#94A3B8") }
                         }
                     }
@@ -193,7 +200,7 @@ public class MainPage : ContentPage
                         {
                             new Label { Text = "EURO (EUR)", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#64748B") },
                             new Label { FontSize = 22, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
-                                .Bind(Label.TextProperty, "State.EurRate", stringFormat: "{0:N4} VES"),
+                                .Bind(Label.TextProperty, nameof(MainViewModel.EurRate), stringFormat: "{0:N4} VES"),
                             new Label { Text = "Banco Central de Venezuela", FontSize = 9, TextColor = Color.FromArgb("#94A3B8") }
                         }
                     }
@@ -230,15 +237,7 @@ public class MainPage : ContentPage
                         TextColor = Color.FromArgb("#0F172A"),
                         BackgroundColor = Color.FromArgb("#F1F5F9") // slate-100
                     }
-                    .Bind(DatePicker.DateProperty, "State.SelectedDate", BindingMode.OneWay)
-                    .Invoke(picker => picker.DateSelected += (s, e) => 
-                    {
-                        var newDate = e.NewDate ?? DateTime.Today;
-                        if (_store.State.SelectedDate.Date != newDate.Date)
-                        {
-                            _store.Dispatch(new SelectDate(newDate));
-                        }
-                    })
+                    .Bind(DatePicker.DateProperty, nameof(MainViewModel.SelectedDate), BindingMode.TwoWay)
                 }
             }
         };
@@ -272,17 +271,17 @@ public class MainPage : ContentPage
                         ColumnSpacing = 10,
                         Children =
                         {
-                            new Button { Text = "Dolar (USD)", CornerRadius = 6, HeightRequest = 40, Command = new Command(() => _store.Dispatch(new SelectCurrency("USD"))) }
-                                .Bind(Button.BackgroundColorProperty, "State.SelectedCurrency",
+                            new Button { Text = "Dolar (USD)", CornerRadius = 6, HeightRequest = 40, Command = _viewModel.SelectCurrencyCommand, CommandParameter = "USD" }
+                                .Bind(Button.BackgroundColorProperty, nameof(MainViewModel.SelectedCurrency),
                                     convert: (string? curr) => curr == "USD" ? Color.FromArgb("#0F172A") : Color.FromArgb("#F1F5F9"))
-                                .Bind(Button.TextColorProperty, "State.SelectedCurrency",
+                                .Bind(Button.TextColorProperty, nameof(MainViewModel.SelectedCurrency),
                                     convert: (string? curr) => curr == "USD" ? Colors.White : Color.FromArgb("#475569"))
                                 .Column(0),
 
-                            new Button { Text = "Euro (EUR)", CornerRadius = 6, HeightRequest = 40, Command = new Command(() => _store.Dispatch(new SelectCurrency("EUR"))) }
-                                .Bind(Button.BackgroundColorProperty, "State.SelectedCurrency",
+                            new Button { Text = "Euro (EUR)", CornerRadius = 6, HeightRequest = 40, Command = _viewModel.SelectCurrencyCommand, CommandParameter = "EUR" }
+                                .Bind(Button.BackgroundColorProperty, nameof(MainViewModel.SelectedCurrency),
                                     convert: (string? curr) => curr == "EUR" ? Color.FromArgb("#0F172A") : Color.FromArgb("#F1F5F9"))
-                                .Bind(Button.TextColorProperty, "State.SelectedCurrency",
+                                .Bind(Button.TextColorProperty, nameof(MainViewModel.SelectedCurrency),
                                     convert: (string? curr) => curr == "EUR" ? Colors.White : Color.FromArgb("#475569"))
                                 .Column(1)
                         }
@@ -291,7 +290,7 @@ public class MainPage : ContentPage
                     // Entrada de Monto
                     new Grid
                     {
-                        ColumnDefinitions = Columns.Define(Star, Auto),
+                        ColumnDefinitions = Columns.Define(Star, Auto, Auto),
                         ColumnSpacing = 10,
                         Children =
                         {
@@ -304,15 +303,21 @@ public class MainPage : ContentPage
                                 BackgroundColor = Color.FromArgb("#F1F5F9"),
                                 HeightRequest = 42
                             }
-                            .Bind(Entry.TextProperty, "State.AmountText", BindingMode.OneWay)
-                            .Invoke(entry => entry.TextChanged += (s, e) => 
-                            {
-                                if (_store.State.AmountText != e.NewTextValue)
-                                {
-                                    _store.Dispatch(new ChangeAmount(e.NewTextValue));
-                                }
-                            })
+                            .Bind(Entry.TextProperty, nameof(MainViewModel.AmountText), BindingMode.TwoWay)
                             .Column(0),
+
+                            new Button
+                            {
+                                Text = "⎘",
+                                FontSize = 14,
+                                TextColor = Color.FromArgb("#475569"),
+                                BackgroundColor = Color.FromArgb("#F1F5F9"),
+                                HeightRequest = 42,
+                                WidthRequest = 42,
+                                CornerRadius = 6,
+                                Command = _viewModel.CopyAmountToConvertCommand
+                            }
+                            .Column(1),
 
                             new Button
                             {
@@ -321,11 +326,11 @@ public class MainPage : ContentPage
                                 BackgroundColor = Color.FromArgb("#0F172A"),
                                 HeightRequest = 42,
                                 FontAttributes = FontAttributes.Bold,
-                                Command = new Command(() => _store.Dispatch(new ToggleDirection()))
+                                Command = _viewModel.ToggleDirectionCommand
                             }
-                            .Bind(Button.TextProperty, "State.IsToVes",
+                            .Bind(Button.TextProperty, nameof(MainViewModel.IsToVes),
                                 convert: (bool toVes) => toVes ? "Divisa a VES" : "VES a Divisa")
-                            .Column(1)
+                            .Column(2)
                         }
                     },
 
@@ -335,20 +340,41 @@ public class MainPage : ContentPage
                         StrokeShape = new RoundRectangle { CornerRadius = 6 },
                         BackgroundColor = Color.FromArgb("#F1F5F9"),
                         Padding = 12,
-                        Content = new VerticalStackLayout
+                        Content = new Grid
                         {
-                            HorizontalOptions = LayoutOptions.Center,
-                            Spacing = 4,
+                            ColumnDefinitions = Columns.Define(Star, Auto),
                             Children =
                             {
-                                new Label { Text = "RESULTADO ESTIMADO", FontSize = 9, TextColor = Color.FromArgb("#64748B"), HorizontalTextAlignment = TextAlignment.Center },
-                                new Label
+                                new VerticalStackLayout
                                 {
-                                    FontSize = 24,
-                                    FontAttributes = FontAttributes.Bold,
-                                    TextColor = Color.FromArgb("#0F172A")
+                                    HorizontalOptions = LayoutOptions.Center,
+                                    Spacing = 4,
+                                    Children =
+                                    {
+                                        new Label { Text = "RESULTADO ESTIMADO", FontSize = 9, TextColor = Color.FromArgb("#64748B"), HorizontalTextAlignment = TextAlignment.Center },
+                                        new Label
+                                        {
+                                            FontSize = 24,
+                                            FontAttributes = FontAttributes.Bold,
+                                            TextColor = Color.FromArgb("#0F172A")
+                                        }
+                                        .Bind(Label.TextProperty, nameof(MainViewModel.ConversionResult))
+                                    }
                                 }
-                                .Bind(Label.TextProperty, "State.ConversionResult")
+                                .Column(0),
+
+                                new Button
+                                {
+                                    Text = "⎘",
+                                    FontSize = 16,
+                                    TextColor = Color.FromArgb("#475569"),
+                                    BackgroundColor = Colors.Transparent,
+                                    HeightRequest = 40,
+                                    WidthRequest = 40,
+                                    Command = _viewModel.CopyResultCommand
+                                }
+                                .Column(1)
+                                .CenterVertical()
                             }
                         }
                     }
@@ -425,7 +451,7 @@ public class MainPage : ContentPage
                                     };
                                 })
                             }
-                            .Bind(CollectionView.ItemsSourceProperty, "State.History")
+                            .Bind(CollectionView.ItemsSourceProperty, nameof(MainViewModel.History))
                         }
                     }
                 }
@@ -433,7 +459,6 @@ public class MainPage : ContentPage
         };
     }
 
-    // Capa de carga que difumine levemente el contenido y muestra el spinner central
     private View CreateLoadingOverlay()
     {
         return new Grid
@@ -459,7 +484,7 @@ public class MainPage : ContentPage
                             WidthRequest = 44,
                             HorizontalOptions = LayoutOptions.Center
                         }
-                        .Bind(ActivityIndicator.IsRunningProperty, "State.IsBusy"),
+                        .Bind(ActivityIndicator.IsRunningProperty, nameof(MainViewModel.IsBusy)),
 
                         new Label
                         {
@@ -468,11 +493,11 @@ public class MainPage : ContentPage
                             FontAttributes = FontAttributes.Bold,
                             HorizontalTextAlignment = TextAlignment.Center
                         }
-                        .Bind(Label.TextProperty, "State.StatusMessage")
+                        .Bind(Label.TextProperty, nameof(MainViewModel.StatusMessage))
                     }
                 }
             }
         }
-        .Bind(Grid.IsVisibleProperty, "State.IsBusy");
+        .Bind(Grid.IsVisibleProperty, nameof(MainViewModel.IsBusy));
     }
 }
