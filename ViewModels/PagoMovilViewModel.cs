@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Runtime.CompilerServices;
@@ -13,6 +12,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Maui.ApplicationModel;
 using BcvExchangeApp.Data;
 using BcvExchangeApp.Models;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 
 namespace BcvExchangeApp.ViewModels;
 
@@ -21,35 +22,44 @@ public record Bank(string Code, string Name)
     public string DisplayName => $"{Code} - {Name}";
 }
 
-public class PagoMovilViewModel : INotifyPropertyChanged
+public partial class PagoMovilViewModel : ObservableObject
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly SemaphoreSlim _dbSemaphore = new(1, 1);
 
+    [ObservableProperty]
     private IReadOnlyList<PagoMovilRecord> _records = Array.Empty<PagoMovilRecord>();
+
     private IReadOnlyList<PagoMovilRecord> _allRecords = Array.Empty<PagoMovilRecord>();
+
+    [ObservableProperty]
     private string _searchQuery = string.Empty;
+
+    [ObservableProperty]
     private IReadOnlyList<Bank> _banks = StaticBanks;
+
+    [ObservableProperty]
     private bool _isLoading;
+
+    [ObservableProperty]
     private string _statusMessage = string.Empty;
 
     // Form fields
+    [ObservableProperty]
     private string _formCedula = string.Empty;
+
+    [ObservableProperty]
     private string _formPhone = string.Empty;
+
+    [ObservableProperty]
     private Bank? _formSelectedBank;
+
+    [ObservableProperty]
     private string _formErrorMessage = string.Empty;
 
     public PagoMovilViewModel(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
-
-        // Commands
-        LoadRecordsCommand = new Command(async () => await LoadRecordsAsync());
-        AddRecordCommand = new Command<INavigation>(async navigation => await AddRecordAsync(navigation));
-        DeleteRecordCommand = new Command<PagoMovilRecord>(async record => await DeleteRecordAsync(record));
-        CopyFieldCommand = new Command<string>(async text => await CopyFieldAsync(text));
-        CopyAllCommand = new Command<PagoMovilRecord>(async record => await CopyAllAsync(record));
-        ShareRecordCommand = new Command<PagoMovilRecord>(async record => await ShareRecordAsync(record));
     }
 
     private BcvDbContext GetDbContext()
@@ -57,85 +67,17 @@ public class PagoMovilViewModel : INotifyPropertyChanged
         return _serviceProvider.GetRequiredService<BcvDbContext>();
     }
 
-    // Properties
-    public IReadOnlyList<PagoMovilRecord> Records
+    // Partial change notification handlers
+    partial void OnStatusMessageChanged(string value)
     {
-        get => _records;
-        set => SetProperty(ref _records, value);
-    }
-
-    public string SearchQuery
-    {
-        get => _searchQuery;
-        set
+        // Limpiar mensaje tras unos segundos de forma asíncrona
+        if (!string.IsNullOrEmpty(value))
         {
-            if (SetProperty(ref _searchQuery, value))
-            {
-                ApplyFilter();
-            }
+            Task.Delay(3000).ContinueWith(_ => StatusMessage = string.Empty);
         }
     }
 
-    public IReadOnlyList<Bank> Banks
-    {
-        get => _banks;
-        set => SetProperty(ref _banks, value);
-    }
-
-    public bool IsLoading
-    {
-        get => _isLoading;
-        set => SetProperty(ref _isLoading, value);
-    }
-
-    public string StatusMessage
-    {
-        get => _statusMessage;
-        set
-        {
-            if (SetProperty(ref _statusMessage, value))
-            {
-                // Limpiar mensaje tras unos segundos de forma asíncrona
-                if (!string.IsNullOrEmpty(value))
-                {
-                    Task.Delay(3000).ContinueWith(_ => StatusMessage = string.Empty);
-                }
-            }
-        }
-    }
-
-    // Form fields properties
-    public string FormCedula
-    {
-        get => _formCedula;
-        set => SetProperty(ref _formCedula, value);
-    }
-
-    public string FormPhone
-    {
-        get => _formPhone;
-        set => SetProperty(ref _formPhone, value);
-    }
-
-    public Bank? FormSelectedBank
-    {
-        get => _formSelectedBank;
-        set => SetProperty(ref _formSelectedBank, value);
-    }
-
-    public string FormErrorMessage
-    {
-        get => _formErrorMessage;
-        set => SetProperty(ref _formErrorMessage, value);
-    }
-
-    // Commands
-    public ICommand LoadRecordsCommand { get; }
-    public ICommand AddRecordCommand { get; }
-    public ICommand DeleteRecordCommand { get; }
-    public ICommand CopyFieldCommand { get; }
-    public ICommand CopyAllCommand { get; }
-    public ICommand ShareRecordCommand { get; }
+    partial void OnSearchQueryChanged(string value) => ApplyFilter();
 
     // Logic
     public async Task InitializeAsync()
@@ -207,6 +149,7 @@ public class PagoMovilViewModel : INotifyPropertyChanged
         MainThread.BeginInvokeOnMainThread(() => Banks = StaticBanks);
     }
 
+    [RelayCommand]
     public async Task LoadRecordsAsync()
     {
         MainThread.BeginInvokeOnMainThread(() => IsLoading = true);
@@ -239,13 +182,13 @@ public class PagoMovilViewModel : INotifyPropertyChanged
 
     private void ApplyFilter()
     {
-        if (string.IsNullOrWhiteSpace(_searchQuery))
+        if (string.IsNullOrWhiteSpace(SearchQuery))
         {
             Records = _allRecords;
         }
         else
         {
-            string query = _searchQuery.Trim().ToLowerInvariant();
+            string query = SearchQuery.Trim().ToLowerInvariant();
             var filtered = new List<PagoMovilRecord>();
             foreach (var r in _allRecords)
             {
@@ -261,6 +204,7 @@ public class PagoMovilViewModel : INotifyPropertyChanged
         }
     }
 
+    [RelayCommand]
     private async Task AddRecordAsync(INavigation navigation)
     {
         FormErrorMessage = string.Empty;
@@ -372,6 +316,7 @@ public class PagoMovilViewModel : INotifyPropertyChanged
         });
     }
 
+    [RelayCommand]
     private async Task DeleteRecordAsync(PagoMovilRecord record)
     {
         await _dbSemaphore.WaitAsync();
@@ -399,6 +344,7 @@ public class PagoMovilViewModel : INotifyPropertyChanged
         });
     }
 
+    [RelayCommand]
     private async Task CopyFieldAsync(string text)
     {
         if (!string.IsNullOrWhiteSpace(text))
@@ -408,16 +354,18 @@ public class PagoMovilViewModel : INotifyPropertyChanged
         }
     }
 
+    [RelayCommand]
     private async Task CopyAllAsync(PagoMovilRecord record)
     {
         string text = $"{record.Cedula}\n{record.Phone}\n{record.BankCode} - {record.BankName}";
         await Clipboard.Default.SetTextAsync(text);
-        StatusMessage = "Datos de Pago Móvil copiados.";
+        StatusMessage = "Datos de Pago Móvil copiados (formato crudo).";
     }
 
+    [RelayCommand]
     private async Task ShareRecordAsync(PagoMovilRecord record)
     {
-        string text = $"{record.Cedula}\n{record.Phone}\n{record.BankCode} - {record.BankName}";
+        string text = $"Datos de Pago Móvil:\nBanco: {record.BankCode} - {record.BankName}\nCédula: {record.Cedula}\nTeléfono: {record.Phone}";
         await Share.Default.RequestAsync(new ShareTextRequest
         {
             Text = text,
@@ -454,23 +402,4 @@ public class PagoMovilViewModel : INotifyPropertyChanged
         new("0178", "N58 BANCO DIGITAL BANCO MICROFINANCIERO S A"),
         new("0191", "BANCO NACIONAL DE CREDITO")
     };
-
-    // INotifyPropertyChanged
-    public event PropertyChangedEventHandler? PropertyChanged;
-
-    protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-    {
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-    }
-
-    protected bool SetProperty<T>(ref T backingStore, T value, [CallerMemberName] string propertyName = "", Action? onChanged = null)
-    {
-        if (EqualityComparer<T>.Default.Equals(backingStore, value))
-            return false;
-
-        backingStore = value;
-        onChanged?.Invoke();
-        OnPropertyChanged(propertyName);
-        return true;
-    }
 }
