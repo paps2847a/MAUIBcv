@@ -140,6 +140,7 @@ public class PagoMovilViewModel : INotifyPropertyChanged
     // Logic
     public async Task InitializeAsync()
     {
+        MainThread.BeginInvokeOnMainThread(() => IsLoading = true);
         await _dbSemaphore.WaitAsync();
         try
         {

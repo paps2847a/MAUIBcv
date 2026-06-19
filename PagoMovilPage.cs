@@ -41,6 +41,10 @@ public class PagoMovilPage : ContentPage
                         }
                     }
                 }
+                .Bind(ScrollView.OpacityProperty, nameof(PagoMovilViewModel.IsLoading), convert: (bool loading) => loading ? 0.35 : 1.0)
+                .Bind(ScrollView.IsEnabledProperty, nameof(PagoMovilViewModel.IsLoading), convert: (bool loading) => !loading),
+
+                CreateLoadingOverlay()
             }
         };
     }
@@ -179,6 +183,27 @@ public class PagoMovilPage : ContentPage
                 }
             }
         };
+    }
+
+    private View CreateLoadingOverlay()
+    {
+        return new Grid
+        {
+            BackgroundColor = Color.FromArgb("#80FFFFFF"), // Blanco con 50% de opacidad para difuminar
+            Children =
+            {
+                new ActivityIndicator
+                {
+                    IsRunning = true,
+                    Color = Color.FromArgb("#0F172A"),
+                    HeightRequest = 50,
+                    WidthRequest = 50,
+                    HorizontalOptions = LayoutOptions.Center,
+                    VerticalOptions = LayoutOptions.Center
+                }
+            }
+        }
+        .Bind(Grid.IsVisibleProperty, nameof(PagoMovilViewModel.IsLoading));
     }
 
     private View CreateRecordsList()
