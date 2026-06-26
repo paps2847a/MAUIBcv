@@ -83,9 +83,11 @@ public partial class MainViewModel : ObservableObject
         _formattedDate = DateTime.Today.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
     }
 
-    private BcvDbContext GetDbContext()
+    private IServiceScope CreateDbScope(out BcvDbContext dbContext)
     {
-        return _serviceProvider.GetRequiredService<BcvDbContext>();
+        var scope = _serviceProvider.CreateScope();
+        dbContext = scope.ServiceProvider.GetRequiredService<BcvDbContext>();
+        return scope;
     }
 
     // Partial change notification handlers
@@ -109,18 +111,20 @@ public partial class MainViewModel : ObservableObject
             await _dbSemaphore.WaitAsync();
             try
             {
-                var dbContext = GetDbContext();
-                await dbContext.Database.EnsureCreatedAsync();
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
-                    "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
-                    "\"Cedula\" TEXT NOT NULL, " +
-                    "\"Phone\" TEXT NOT NULL, " +
-                    "\"BankCode\" TEXT NOT NULL, " +
-                    "\"BankName\" TEXT NOT NULL, " +
-                    "\"CreatedAt\" TEXT NOT NULL" +
-                    ");"
-                );
+                using (CreateDbScope(out var dbContext))
+                {
+                    await dbContext.Database.EnsureCreatedAsync();
+                    await dbContext.Database.ExecuteSqlRawAsync(
+                        "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
+                        "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
+                        "\"Cedula\" TEXT NOT NULL, " +
+                        "\"Phone\" TEXT NOT NULL, " +
+                        "\"BankCode\" TEXT NOT NULL, " +
+                        "\"BankName\" TEXT NOT NULL, " +
+                        "\"CreatedAt\" TEXT NOT NULL" +
+                        ");"
+                    );
+                }
             }
             finally
             {
@@ -153,68 +157,70 @@ public partial class MainViewModel : ObservableObject
         await _dbSemaphore.WaitAsync();
         try
         {
-            var dbContext = GetDbContext();
-            if (scraped != null)
+            using (CreateDbScope(out var dbContext))
             {
-                var existing = await dbContext.ExchangeRates
-                    .FirstOrDefaultAsync(e => e.Date == scraped.Date);
-
-                if (existing == null)
+                if (scraped != null)
                 {
-                    dbContext.ExchangeRates.Add(scraped);
+                    var existing = await dbContext.ExchangeRates
+                        .FirstOrDefaultAsync(e => e.Date == scraped.Date);
+
+                    if (existing == null)
+                    {
+                        dbContext.ExchangeRates.Add(scraped);
+                    }
+                    else
+                    {
+                        existing.UsdRate = scraped.UsdRate;
+                        existing.EurRate = scraped.EurRate;
+                        existing.CreatedAt = DateTime.Now;
+                    }
+                    await dbContext.SaveChangesAsync();
+
+                    var newHistory = await dbContext.ExchangeRates
+                        .OrderByDescending(e => e.Date)
+                        .Take(15)
+                        .ToListAsync();
+
+                    MainThread.BeginInvokeOnMainThread(() =>
+                    {
+                        History = newHistory;
+                        UsdRate = scraped.UsdRate;
+                        EurRate = scraped.EurRate;
+                        _selectedDate = scraped.Date; // update backing field directly to avoid triggering OnSelectedDateChanged task
+                        OnPropertyChanged(nameof(SelectedDate));
+                        FormattedDate = scraped.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
+                        SetBusyState(false, $"Tasas actualizadas desde el BCV (Fecha Valor: {scraped.Date:dd/MM/yyyy}).");
+                    });
                 }
                 else
                 {
-                    existing.UsdRate = scraped.UsdRate;
-                    existing.EurRate = scraped.EurRate;
-                    existing.CreatedAt = DateTime.Now;
-                }
-                await dbContext.SaveChangesAsync();
+                    var today = DateTime.Today;
+                    var todayRate = await dbContext.ExchangeRates
+                        .FirstOrDefaultAsync(e => e.Date == today);
 
-                var newHistory = await dbContext.ExchangeRates
-                    .OrderByDescending(e => e.Date)
-                    .Take(15)
-                    .ToListAsync();
-
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    History = newHistory;
-                    UsdRate = scraped.UsdRate;
-                    EurRate = scraped.EurRate;
-                    _selectedDate = scraped.Date; // update backing field directly to avoid triggering OnSelectedDateChanged task
-                    OnPropertyChanged(nameof(SelectedDate));
-                    FormattedDate = scraped.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
-                    SetBusyState(false, $"Tasas actualizadas desde el BCV (Fecha Valor: {scraped.Date:dd/MM/yyyy}).");
-                });
-            }
-            else
-            {
-                var today = DateTime.Today;
-                var todayRate = await dbContext.ExchangeRates
-                    .FirstOrDefaultAsync(e => e.Date == today);
-
-                MainThread.BeginInvokeOnMainThread(() =>
-                {
-                    if (todayRate != null)
+                    MainThread.BeginInvokeOnMainThread(() =>
                     {
-                        UsdRate = todayRate.UsdRate;
-                        EurRate = todayRate.EurRate;
-                        _selectedDate = todayRate.Date;
-                        OnPropertyChanged(nameof(SelectedDate));
-                        FormattedDate = todayRate.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
-                        SetBusyState(false, "Sin conexión. Mostrando tasas guardadas para el día de hoy.");
-                      }
-                      else
-                      {
-                          UsdRate = 0;
-                          EurRate = 0;
-                          _selectedDate = today;
-                          OnPropertyChanged(nameof(SelectedDate));
-                          FormattedDate = today.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
-                          SetBusyState(false, "Sin conexión. No se encontraron tasas registradas para el día de hoy.");
-                      }
-                  });
-              }
+                        if (todayRate != null)
+                        {
+                            UsdRate = todayRate.UsdRate;
+                            EurRate = todayRate.EurRate;
+                            _selectedDate = todayRate.Date;
+                            OnPropertyChanged(nameof(SelectedDate));
+                            FormattedDate = todayRate.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
+                            SetBusyState(false, "Sin conexión. Mostrando tasas guardadas para el día de hoy.");
+                        }
+                        else
+                        {
+                            UsdRate = 0;
+                            EurRate = 0;
+                            _selectedDate = today;
+                            OnPropertyChanged(nameof(SelectedDate));
+                            FormattedDate = today.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
+                            SetBusyState(false, "Sin conexión. No se encontraron tasas registradas para el día de hoy.");
+                        }
+                    });
+                }
+            }
           }
           catch (Exception ex)
           {
@@ -253,32 +259,34 @@ public partial class MainViewModel : ObservableObject
           await _dbSemaphore.WaitAsync();
           try
           {
-              var dbContext = GetDbContext();
-              var targetDate = date.Date;
-              var rate = await dbContext.ExchangeRates
-                  .FirstOrDefaultAsync(e => e.Date == targetDate);
-
-              MainThread.BeginInvokeOnMainThread(() =>
+              using (CreateDbScope(out var dbContext))
               {
-                  if (rate != null)
-                  {
-                      UsdRate = rate.UsdRate;
-                      EurRate = rate.EurRate;
-                      _selectedDate = rate.Date;
-                      OnPropertyChanged(nameof(SelectedDate));
-                      FormattedDate = rate.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
-                      SetBusyState(false, $"Mostrando tasas históricas para el {rate.Date:dd/MM/yyyy}.");
-                  }
-                  else
-                  {
-                      UsdRate = 0;
-                      EurRate = 0;
-                      _selectedDate = date;
-                      OnPropertyChanged(nameof(SelectedDate));
-                      FormattedDate = date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
-                      SetBusyState(false, $"No hay datos guardados para el {date:dd/MM/yyyy}. Presiona Actualizar para intentar buscar online.");
-                  }
-              });
+                var targetDate = date.Date;
+                var rate = await dbContext.ExchangeRates
+                    .FirstOrDefaultAsync(e => e.Date == targetDate);
+
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    if (rate != null)
+                    {
+                        UsdRate = rate.UsdRate;
+                        EurRate = rate.EurRate;
+                        _selectedDate = rate.Date;
+                        OnPropertyChanged(nameof(SelectedDate));
+                        FormattedDate = rate.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
+                        SetBusyState(false, $"Mostrando tasas históricas para el {rate.Date:dd/MM/yyyy}.");
+                    }
+                    else
+                    {
+                        UsdRate = 0;
+                        EurRate = 0;
+                        _selectedDate = date;
+                        OnPropertyChanged(nameof(SelectedDate));
+                        FormattedDate = date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
+                        SetBusyState(false, $"No hay datos guardados para el {date:dd/MM/yyyy}. Presiona Actualizar para intentar buscar online.");
+                    }
+                });
+              }
           }
           catch (Exception ex)
           {
@@ -299,16 +307,18 @@ public partial class MainViewModel : ObservableObject
           await _dbSemaphore.WaitAsync();
           try
           {
-              var dbContext = GetDbContext();
-              var historyList = await dbContext.ExchangeRates
-                  .OrderByDescending(e => e.Date)
-                  .Take(15)
-                  .ToListAsync();
-
-              MainThread.BeginInvokeOnMainThread(() =>
+              using (CreateDbScope(out var dbContext))
               {
-                  History = historyList;
-              });
+                var historyList = await dbContext.ExchangeRates
+                    .OrderByDescending(e => e.Date)
+                    .Take(15)
+                    .ToListAsync();
+
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    History = historyList;
+                });
+              }
           }
           catch (Exception ex)
           {

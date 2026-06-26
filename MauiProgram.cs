@@ -22,6 +22,7 @@ public static class MauiProgram
 
 		// Registro de base de datos, servicios, ViewModel y Vista
 		builder.Services.AddDbContext<BcvDbContext>();
+		
 		builder.Services.AddSingleton<BcvScraperService>();
 		builder.Services.AddSingleton<MainViewModel>();
 		builder.Services.AddSingleton<MainPage>();
@@ -29,6 +30,8 @@ public static class MauiProgram
 		builder.Services.AddSingleton<PagoMovilPage>();
 		builder.Services.AddTransient<PagoMovilFormPage>();
 		builder.Services.AddTransient<PagoMovilDetailPage>();
+		builder.Services.AddSingleton<ComprasViewModel>();
+		builder.Services.AddSingleton<Compras>();
 
 #if DEBUG
 		builder.Logging.AddDebug();

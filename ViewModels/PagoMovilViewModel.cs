@@ -62,9 +62,11 @@ public partial class PagoMovilViewModel : ObservableObject
         _serviceProvider = serviceProvider;
     }
 
-    private BcvDbContext GetDbContext()
+    private IServiceScope CreateDbScope(out BcvDbContext dbContext)
     {
-        return _serviceProvider.GetRequiredService<BcvDbContext>();
+        var scope = _serviceProvider.CreateScope();
+        dbContext = scope.ServiceProvider.GetRequiredService<BcvDbContext>();
+        return scope;
     }
 
     // Partial change notification handlers
@@ -86,18 +88,20 @@ public partial class PagoMovilViewModel : ObservableObject
         await _dbSemaphore.WaitAsync();
         try
         {
-            var dbContext = GetDbContext();
-            await dbContext.Database.EnsureCreatedAsync();
-            await dbContext.Database.ExecuteSqlRawAsync(
-                "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
-                "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
-                "\"Cedula\" TEXT NOT NULL, " +
-                "\"Phone\" TEXT NOT NULL, " +
-                "\"BankCode\" TEXT NOT NULL, " +
-                "\"BankName\" TEXT NOT NULL, " +
-                "\"CreatedAt\" TEXT NOT NULL" +
-                ");"
-            );
+            using (CreateDbScope(out var dbContext))
+            {
+                await dbContext.Database.EnsureCreatedAsync();
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
+                    "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
+                    "\"Cedula\" TEXT NOT NULL, " +
+                    "\"Phone\" TEXT NOT NULL, " +
+                    "\"BankCode\" TEXT NOT NULL, " +
+                    "\"BankName\" TEXT NOT NULL, " +
+                    "\"CreatedAt\" TEXT NOT NULL" +
+                    ");"
+                );
+            }
         }
         catch (Exception ex)
         {
@@ -157,17 +161,19 @@ public partial class PagoMovilViewModel : ObservableObject
         await _dbSemaphore.WaitAsync();
         try
         {
-            var dbContext = GetDbContext();
-            var list = await dbContext.PagoMovilRecords
-                .OrderByDescending(r => r.CreatedAt)
-                .ToListAsync();
-
-            MainThread.BeginInvokeOnMainThread(() =>
+            using (CreateDbScope(out var dbContext))
             {
-                _allRecords = list;
-                ApplyFilter();
-                IsLoading = false;
-            });
+                var list = await dbContext.PagoMovilRecords
+                    .OrderByDescending(r => r.CreatedAt)
+                    .ToListAsync();
+
+                MainThread.BeginInvokeOnMainThread(() =>
+                {
+                    _allRecords = list;
+                    ApplyFilter();
+                    IsLoading = false;
+                });
+            }
         }
         catch (Exception ex)
         {
@@ -240,24 +246,25 @@ public partial class PagoMovilViewModel : ObservableObject
         await _dbSemaphore.WaitAsync();
         try
         {
-            var dbContext = GetDbContext();
-            
-            // Asegurar tabla
-            await dbContext.Database.ExecuteSqlRawAsync(
-                "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
-                "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
-                "\"Cedula\" TEXT NOT NULL, " +
-                "\"Phone\" TEXT NOT NULL, " +
-                "\"BankCode\" TEXT NOT NULL, " +
-                "\"BankName\" TEXT NOT NULL, " +
-                "\"CreatedAt\" TEXT NOT NULL" +
-                ");"
-            );
+            using (CreateDbScope(out var dbContext))
+            {
+                // Asegurar tabla
+                await dbContext.Database.ExecuteSqlRawAsync(
+                    "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
+                    "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
+                    "\"Cedula\" TEXT NOT NULL, " +
+                    "\"Phone\" TEXT NOT NULL, " +
+                    "\"BankCode\" TEXT NOT NULL, " +
+                    "\"BankName\" TEXT NOT NULL, " +
+                    "\"CreatedAt\" TEXT NOT NULL" +
+                    ");"
+                );
 
-            exists = await dbContext.PagoMovilRecords.AnyAsync(r =>
-                r.BankCode == FormSelectedBank.Code &&
-                r.Phone == FormPhone.Trim() &&
-                r.Cedula == cleanCedula);
+                exists = await dbContext.PagoMovilRecords.AnyAsync(r =>
+                    r.BankCode == FormSelectedBank.Code &&
+                    r.Phone == FormPhone.Trim() &&
+                    r.Cedula == cleanCedula);
+            }
         }
         catch (Exception ex)
         {
@@ -287,9 +294,11 @@ public partial class PagoMovilViewModel : ObservableObject
         await _dbSemaphore.WaitAsync();
         try
         {
-            var dbContext = GetDbContext();
-            dbContext.PagoMovilRecords.Add(newRecord);
-            await dbContext.SaveChangesAsync();
+            using (CreateDbScope(out var dbContext))
+            {
+                dbContext.PagoMovilRecords.Add(newRecord);
+                await dbContext.SaveChangesAsync();
+            }
         }
         catch (Exception ex)
         {
@@ -322,9 +331,11 @@ public partial class PagoMovilViewModel : ObservableObject
         await _dbSemaphore.WaitAsync();
         try
         {
-            var dbContext = GetDbContext();
-            dbContext.PagoMovilRecords.Remove(record);
-            await dbContext.SaveChangesAsync();
+            using (CreateDbScope(out var dbContext))
+            {
+                dbContext.PagoMovilRecords.Remove(record);
+                await dbContext.SaveChangesAsync();
+            }
         }
         catch (Exception ex)
         {

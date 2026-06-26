@@ -7,14 +7,20 @@
     Title="BcvExchangeApp"
     FlyoutBehavior="Flyout">
 
-    <FlyoutItem Title="Inicio" Route="MainPage">
+    <FlyoutItem Title="Inicio"
+            Route="MainPage">
         <ShellContent
-            ContentTemplate="{DataTemplate local:MainPage}" />
+            ContentTemplate="{DataTemplate local:MainPage}"/>
     </FlyoutItem>
 
-    <FlyoutItem Title="Datos de Pago Móvil" Route="PagoMovilPage">
+    <FlyoutItem Title="Datos de Pago Móvil"
+            Route="PagoMovilPage">
         <ShellContent
-            ContentTemplate="{DataTemplate local:PagoMovilPage}" />
+            ContentTemplate="{DataTemplate local:PagoMovilPage}"/>
+    </FlyoutItem>
+
+    <FlyoutItem Title="Gestor de Compras" Route="Compras">
+        <ShellContent ContentTemplate="{DataTemplate local:Compras}"/>
     </FlyoutItem>
 
 </Shell>

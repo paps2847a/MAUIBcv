@@ -9,6 +9,8 @@ public class BcvDbContext : DbContext
 {
     public DbSet<ExchangeRate> ExchangeRates => Set<ExchangeRate>();
     public DbSet<PagoMovilRecord> PagoMovilRecords => Set<PagoMovilRecord>();
+    public DbSet<ShoppingItem> ShoppingItems => Set<ShoppingItem>();
+    public DbSet<PurchaseRecord> PurchaseRecords => Set<PurchaseRecord>();
 
     public BcvDbContext()
     {
