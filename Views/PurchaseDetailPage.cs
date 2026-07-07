@@ -9,7 +9,7 @@ using CommunityToolkit.Maui.Markup;
 using BcvExchangeApp.Models;
 using static CommunityToolkit.Maui.Markup.GridRowsColumns;
 
-namespace BcvExchangeApp;
+namespace BcvExchangeApp.Views;
 
 public class PurchaseDetailPage : ContentPage
 {
@@ -19,7 +19,8 @@ public class PurchaseDetailPage : ContentPage
     public PurchaseDetailPage(PurchaseRecord record)
     {
         _record = record;
-        BackgroundColor = Color.FromArgb("#F8FAFC"); // slate-50
+        
+        this.BackgroundColor(Color.FromArgb("#F8FAFC")); // slate-50
         Shell.SetNavBarIsVisible(this, false);
 
         // Deserializar productos
@@ -64,45 +65,41 @@ public class PurchaseDetailPage : ContentPage
             Children =
             {
                 new Button
-                {
-                    Text = "←",
-                    FontSize = 20,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Color.FromArgb("#0F172A"),
-                    BackgroundColor = Colors.Transparent,
-                    BorderWidth = 0,
-                    Padding = 0,
-                    HeightRequest = 40,
-                    WidthRequest = 40
-                }
-                .Invoke(btn => btn.Clicked += async (s, e) => 
-                {
-                    // Animación táctil
-                    await btn.ScaleToAsync(0.92, 70, Easing.CubicOut);
-                    await btn.ScaleToAsync(1.0, 70, Easing.CubicIn);
-                    await Navigation.PopAsync();
-                })
-                .Column(0)
-                .CenterVertical(),
+                    {
+                        BackgroundColor = Colors.Transparent,
+                        BorderWidth = 0,
+                        Padding = 0,
+                        HeightRequest = 40,
+                        WidthRequest = 40
+                    }
+                    .Text("←")
+                    .FontSize(20)
+                    .Bold()
+                    .TextColor(Color.FromArgb("#0F172A"))
+                    .Invoke(btn => btn.Clicked += async (s, e) => 
+                    {
+                        // Animación táctil
+                        await btn.ScaleToAsync(0.92, 70, Easing.CubicOut);
+                        await btn.ScaleToAsync(1.0, 70, Easing.CubicIn);
+                        await Navigation.PopAsync();
+                    })
+                    .Column(0)
+                    .CenterVertical(),
 
                 new VerticalStackLayout
                 {
                     Spacing = 4,
                     Children =
                     {
-                        new Label
-                        {
-                            Text = "Detalle de Compra",
-                            FontSize = 22,
-                            FontAttributes = FontAttributes.Bold,
-                            TextColor = Color.FromArgb("#0F172A")
-                        },
-                        new Label
-                        {
-                            Text = _record.PurchaseDate.ToString("dd 'de' MMMM, yyyy - hh:mm tt", new System.Globalization.CultureInfo("es-ES")),
-                            FontSize = 13,
-                            TextColor = Color.FromArgb("#64748B")
-                        }
+                        new Label()
+                            .Text("Detalle de Compra")
+                            .FontSize(22)
+                            .Bold()
+                            .TextColor(Color.FromArgb("#0F172A")),
+                        new Label()
+                            .Text(_record.PurchaseDate.ToString("dd 'de' MMMM, yyyy - hh:mm tt", new System.Globalization.CultureInfo("es-ES")))
+                            .FontSize(13)
+                            .TextColor(Color.FromArgb("#64748B"))
                     }
                 }
                 .Column(1)
@@ -119,13 +116,12 @@ public class PurchaseDetailPage : ContentPage
             Stroke = Color.FromArgb("#E2E8F0"),
             StrokeThickness = 1,
             BackgroundColor = Colors.White,
-            Padding = 16,
             Content = new VerticalStackLayout
             {
                 Spacing = 16,
                 Children =
                 {
-                    new Label { Text = "Resumen de Totales Pagados", FontSize = 14, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") },
+                    new Label().Text("Resumen de Totales Pagados").FontSize(14).Bold().TextColor(Color.FromArgb("#0F172A")),
                     
                     new Grid
                     {
@@ -139,8 +135,8 @@ public class PurchaseDetailPage : ContentPage
                                 HorizontalOptions = LayoutOptions.Center,
                                 Children =
                                 {
-                                    new Label { Text = "TOTAL VES", FontSize = 9, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#64748B") },
-                                    new Label { Text = $"{_record.TotalVes:N2} Bs", FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                                    new Label().Text("TOTAL VES").FontSize(9).Bold().TextColor(Color.FromArgb("#64748B")),
+                                    new Label().Text($"{_record.TotalVes:N2} Bs").FontSize(15).Bold().TextColor(Color.FromArgb("#0F172A"))
                                 }
                             }
                             .Column(0),
@@ -151,8 +147,8 @@ public class PurchaseDetailPage : ContentPage
                                 HorizontalOptions = LayoutOptions.Center,
                                 Children =
                                 {
-                                    new Label { Text = "TOTAL USD", FontSize = 9, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#64748B") },
-                                    new Label { Text = $"${_record.TotalUsd:N2}", FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                                    new Label().Text("TOTAL USD").FontSize(9).Bold().TextColor(Color.FromArgb("#64748B")),
+                                    new Label().Text($"${_record.TotalUsd:N2}").FontSize(15).Bold().TextColor(Color.FromArgb("#0F172A"))
                                 }
                             }
                             .Column(1),
@@ -163,8 +159,8 @@ public class PurchaseDetailPage : ContentPage
                                 HorizontalOptions = LayoutOptions.Center,
                                 Children =
                                 {
-                                    new Label { Text = "TOTAL EUR", FontSize = 9, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#64748B") },
-                                    new Label { Text = $"€{_record.TotalEur:N2}", FontSize = 15, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                                    new Label().Text("TOTAL EUR").FontSize(9).Bold().TextColor(Color.FromArgb("#64748B")),
+                                    new Label().Text($"€{_record.TotalEur:N2}").FontSize(15).Bold().TextColor(Color.FromArgb("#0F172A"))
                                 }
                             }
                             .Column(2)
@@ -180,14 +176,15 @@ public class PurchaseDetailPage : ContentPage
                         HorizontalOptions = LayoutOptions.Center,
                         Children =
                         {
-                            new Label { Text = $"Tasa USD: {_record.UsdRate:N4} Bs", FontSize = 11, TextColor = Color.FromArgb("#64748B"), FontAttributes = FontAttributes.Italic },
-                            new Label { Text = "|", FontSize = 11, TextColor = Color.FromArgb("#CBD5E1") },
-                            new Label { Text = $"Tasa EUR: {_record.EurRate:N4} Bs", FontSize = 11, TextColor = Color.FromArgb("#64748B"), FontAttributes = FontAttributes.Italic }
+                            new Label().Text($"Tasa USD: {_record.UsdRate:N4} Bs").FontSize(11).TextColor(Color.FromArgb("#64748B")).Italic(),
+                            new Label().Text("|").FontSize(11).TextColor(Color.FromArgb("#CBD5E1")),
+                            new Label().Text($"Tasa EUR: {_record.EurRate:N4} Bs").FontSize(11).TextColor(Color.FromArgb("#64748B")).Italic()
                         }
                     }
                 }
             }
-        };
+        }
+        .Padding(16);
     }
 
     private View CreateItemsListSection()
@@ -197,7 +194,7 @@ public class PurchaseDetailPage : ContentPage
             Spacing = 12,
             Children =
             {
-                new Label { Text = "Detalle de Artículos", FontSize = 14, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                new Label().Text("Detalle de Artículos").FontSize(14).Bold().TextColor(Color.FromArgb("#0F172A"))
             }
         };
 
@@ -209,15 +206,13 @@ public class PurchaseDetailPage : ContentPage
                 Stroke = Color.FromArgb("#E2E8F0"),
                 StrokeThickness = 1,
                 BackgroundColor = Colors.White,
-                Padding = new Thickness(24, 30),
-                Content = new Label
-                {
-                    Text = "No hay detalles individuales registrados para esta compra.",
-                    TextColor = Color.FromArgb("#64748B"),
-                    FontSize = 12,
-                    HorizontalTextAlignment = TextAlignment.Center
-                }
-            });
+                Content = new Label()
+                    .Text("No hay detalles individuales registrados para esta compra.")
+                    .TextColor(Color.FromArgb("#64748B"))
+                    .FontSize(12)
+                    .TextCenterHorizontal()
+            }
+            .Padding(new Thickness(24, 30)));
             return layout;
         }
 
@@ -267,7 +262,6 @@ public class PurchaseDetailPage : ContentPage
             Stroke = Color.FromArgb("#E2E8F0"),
             StrokeThickness = 1,
             BackgroundColor = Colors.White,
-            Padding = new Thickness(14, 12),
             Content = new Grid
             {
                 ColumnDefinitions = Columns.Define(Star, Auto),
@@ -281,41 +275,33 @@ public class PurchaseDetailPage : ContentPage
                         Spacing = 2,
                         Children =
                         {
-                            new Label
-                            {
-                                Text = item.Name,
-                                FontAttributes = FontAttributes.Bold,
-                                TextColor = Color.FromArgb("#0F172A"),
-                                FontSize = 13,
-                                LineBreakMode = LineBreakMode.TailTruncation
-                            },
-                            new Label
-                            {
-                                Text = $"{item.Quantity} x {item.Price:N2} {symbol}",
-                                TextColor = Color.FromArgb("#64748B"),
-                                FontSize = 11
-                            }
+                            new Label { LineBreakMode = LineBreakMode.TailTruncation }
+                                .Text(item.Name)
+                                .Bold()
+                                .TextColor(Color.FromArgb("#0F172A"))
+                                .FontSize(13),
+                            new Label()
+                                .Text($"{item.Quantity} x {item.Price:N2} {symbol}")
+                                .TextColor(Color.FromArgb("#64748B"))
+                                .FontSize(11)
                         }
                     }
                     .Row(0).Column(0),
 
                     // Fila 0 Derecha: Total original
-                    new Label
-                    {
-                        Text = $"{itemTotal:N2} {symbol}",
-                        FontAttributes = FontAttributes.Bold,
-                        TextColor = Color.FromArgb("#0F172A"),
-                        FontSize = 13,
-                        VerticalOptions = LayoutOptions.Center
-                    }
-                    .Row(0).Column(1),
+                    new Label()
+                        .Text($"{itemTotal:N2} {symbol}")
+                        .Bold()
+                        .TextColor(Color.FromArgb("#0F172A"))
+                        .FontSize(13)
+                        .CenterVertical()
+                        .Row(0).Column(1),
 
                     // Fila 1 (Span completo): Conversiones en las monedas principales
                     new Border
                     {
                         StrokeShape = new RoundRectangle { CornerRadius = 4 },
                         BackgroundColor = Color.FromArgb("#F8FAFC"), // slate-50
-                        Padding = new Thickness(10, 6),
                         Content = new Grid
                         {
                             ColumnDefinitions = Columns.Define(Star, Star, Star),
@@ -326,8 +312,8 @@ public class PurchaseDetailPage : ContentPage
                                     HorizontalOptions = LayoutOptions.Center,
                                     Children =
                                     {
-                                        new Label { Text = "VES (Bs)", FontSize = 8, TextColor = Color.FromArgb("#64748B"), HorizontalTextAlignment = TextAlignment.Center },
-                                        new Label { Text = $"{vesVal:N2}", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                                        new Label().Text("VES (Bs)").FontSize(8).TextColor(Color.FromArgb("#64748B")).TextCenterHorizontal(),
+                                        new Label().Text($"{vesVal:N2}").FontSize(11).Bold().TextColor(Color.FromArgb("#0F172A"))
                                     }
                                 }.Column(0),
 
@@ -336,8 +322,8 @@ public class PurchaseDetailPage : ContentPage
                                     HorizontalOptions = LayoutOptions.Center,
                                     Children =
                                     {
-                                        new Label { Text = "USD ($)", FontSize = 8, TextColor = Color.FromArgb("#64748B"), HorizontalTextAlignment = TextAlignment.Center },
-                                        new Label { Text = $"{usdVal:N2}", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                                        new Label().Text("USD ($)").FontSize(8).TextColor(Color.FromArgb("#64748B")).TextCenterHorizontal(),
+                                        new Label().Text($"{usdVal:N2}").FontSize(11).Bold().TextColor(Color.FromArgb("#0F172A"))
                                     }
                                 }.Column(1),
 
@@ -346,16 +332,18 @@ public class PurchaseDetailPage : ContentPage
                                     HorizontalOptions = LayoutOptions.Center,
                                     Children =
                                     {
-                                        new Label { Text = "EUR (€)", FontSize = 8, TextColor = Color.FromArgb("#64748B"), HorizontalTextAlignment = TextAlignment.Center },
-                                        new Label { Text = $"{eurVal:N2}", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                                        new Label().Text("EUR (€)").FontSize(8).TextColor(Color.FromArgb("#64748B")).TextCenterHorizontal(),
+                                        new Label().Text($"{eurVal:N2}").FontSize(11).Bold().TextColor(Color.FromArgb("#0F172A"))
                                     }
                                 }.Column(2)
                             }
                         }
                     }
+                    .Padding(new Thickness(10, 6))
                     .Row(1).ColumnSpan(2)
                 }
             }
-        };
+        }
+        .Padding(new Thickness(14, 12));
     }
 }

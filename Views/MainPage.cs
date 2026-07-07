@@ -9,7 +9,7 @@ using BcvExchangeApp.ViewModels;
 using BcvExchangeApp.Models;
 using static CommunityToolkit.Maui.Markup.GridRowsColumns;
 
-namespace BcvExchangeApp;
+namespace BcvExchangeApp.Views;
 
 public class MainPage : ContentPage
 {
@@ -19,7 +19,8 @@ public class MainPage : ContentPage
     {
         _viewModel = viewModel;
         BindingContext = _viewModel;
-        BackgroundColor = Color.FromArgb("#F8FAFC"); // Fondo claro slate-50
+        
+        this.BackgroundColor(Color.FromArgb("#F8FAFC")); // slate-50
 
         // Ocultar la barra de navegación del Shell
         Shell.SetNavBarIsVisible(this, false);
@@ -59,14 +60,12 @@ public class MainPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        // Inicializar de forma diferida tras pintar la UI inicial para evitar ANRs en arranque
-        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(200), () =>
+        // Inicializar de forma diferida tras pintar la UI inicial con retraso para dar tiempo a la transición
+        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(300), () =>
         {
             Task.Run(async () => await _viewModel.InitializeAsync());
         });
     }
-
-    // --- Componentes de la Interfaz ---
 
     private View CreateHeader()
     {
@@ -78,58 +77,54 @@ public class MainPage : ContentPage
             {
                 // Botón del Menú Desplegable (Flyout)
                 new Button
-                {
-                    Text = "☰",
-                    FontSize = 20,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Color.FromArgb("#0F172A"),
-                    BackgroundColor = Colors.Transparent,
-                    BorderWidth = 0,
-                    Padding = 0,
-                    HeightRequest = 40,
-                    WidthRequest = 40,
-                    Command = new Command(() => Shell.Current.FlyoutIsPresented = true)
-                }
-                .Column(0)
-                .CenterVertical(),
+                    {
+                        BackgroundColor = Colors.Transparent,
+                        BorderWidth = 0,
+                        Padding = 0,
+                        HeightRequest = 40,
+                        WidthRequest = 40
+                    }
+                    .Text("☰")
+                    .FontSize(20)
+                    .Bold()
+                    .TextColor(Color.FromArgb("#0F172A"))
+                    .Invoke(btn => btn.Command = new Command(() => Shell.Current.FlyoutIsPresented = true))
+                    .Column(0)
+                    .CenterVertical(),
 
                 new VerticalStackLayout
                 {
                     Spacing = 4,
                     Children =
                     {
-                        new Label
-                        {
-                            Text = "BCV Tasas de Cambio",
-                            FontSize = 22,
-                            FontAttributes = FontAttributes.Bold,
-                            TextColor = Color.FromArgb("#0F172A") // slate-900
-                        },
-                        new Label
-                        {
-                            FontSize = 13,
-                            TextColor = Color.FromArgb("#64748B") // slate-500
-                        }
-                        .Bind(Label.TextProperty, nameof(MainViewModel.FormattedDate), stringFormat: "Fecha Valor: {0}")
+                        new Label()
+                            .Text("BCV Tasas de Cambio")
+                            .FontSize(22)
+                            .Bold()
+                            .TextColor(Color.FromArgb("#0F172A")), // slate-900
+                        new Label()
+                            .FontSize(13)
+                            .TextColor(Color.FromArgb("#64748B")) // slate-500
+                            .Bind(Label.TextProperty, nameof(MainViewModel.FormattedDate), stringFormat: "Fecha Valor: {0}")
                     }
                 }
                 .Column(1)
                 .CenterVertical(),
 
                 new Button
-                {
-                    Text = "Actualizar",
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Colors.White,
-                    BackgroundColor = Color.FromArgb("#0F172A"),
-                    CornerRadius = 15,
-                    Padding = new Thickness(14, 0),
-                    HeightRequest = 30,
-                    FontSize = 11,
-                    Command = _viewModel.FetchLatestRatesCommand
-                }
-                .Column(2)
-                .CenterVertical()
+                    {
+                        TextColor = Colors.White,
+                        BackgroundColor = Color.FromArgb("#0F172A"),
+                        CornerRadius = 15,
+                        Padding = new Thickness(14, 0),
+                        HeightRequest = 30
+                    }
+                    .Text("Actualizar")
+                    .Bold()
+                    .FontSize(11)
+                    .Bind(Button.CommandProperty, nameof(MainViewModel.FetchLatestRatesCommand))
+                    .Column(2)
+                    .CenterVertical()
             }
         };
     }
@@ -142,15 +137,12 @@ public class MainPage : ContentPage
             Stroke = Color.FromArgb("#E2E8F0"), // slate-200
             StrokeThickness = 1,
             BackgroundColor = Colors.White,
-            Padding = new Thickness(16, 12),
-            Content = new Label
-            {
-                TextColor = Color.FromArgb("#475569"), // slate-600
-                FontSize = 12,
-                LineBreakMode = LineBreakMode.WordWrap
-            }
-            .Bind(Label.TextProperty, nameof(MainViewModel.StatusMessage))
+            Content = new Label { LineBreakMode = LineBreakMode.WordWrap }
+                .TextColor(Color.FromArgb("#475569")) // slate-600
+                .FontSize(12)
+                .Bind(Label.TextProperty, nameof(MainViewModel.StatusMessage))
         }
+        .Padding(new Thickness(16, 12))
         .Bind(Border.IsVisibleProperty, nameof(MainViewModel.StatusMessage), 
             convert: (string? msg) => !string.IsNullOrEmpty(msg));
     }
@@ -170,19 +162,19 @@ public class MainPage : ContentPage
                     Stroke = Color.FromArgb("#E2E8F0"),
                     StrokeThickness = 1,
                     BackgroundColor = Colors.White,
-                    Padding = 16,
                     Content = new VerticalStackLayout
                     {
                         Spacing = 6,
                         Children =
                         {
-                            new Label { Text = "DOLAR (USD)", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#64748B") },
-                            new Label { FontSize = 22, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                            new Label().Text("DOLAR (USD)").FontSize(11).Bold().TextColor(Color.FromArgb("#64748B")),
+                            new Label().FontSize(22).Bold().TextColor(Color.FromArgb("#0F172A"))
                                 .Bind(Label.TextProperty, nameof(MainViewModel.UsdRate), stringFormat: "{0:N4} VES"),
-                            new Label { Text = "Banco Central de Venezuela", FontSize = 9, TextColor = Color.FromArgb("#94A3B8") }
+                            new Label().Text("Banco Central de Venezuela").FontSize(9).TextColor(Color.FromArgb("#94A3B8"))
                         }
                     }
                 }
+                .Padding(16)
                 .Column(0),
 
                 // Tarjeta Euro
@@ -192,19 +184,19 @@ public class MainPage : ContentPage
                     Stroke = Color.FromArgb("#E2E8F0"),
                     StrokeThickness = 1,
                     BackgroundColor = Colors.White,
-                    Padding = 16,
                     Content = new VerticalStackLayout
                     {
                         Spacing = 6,
                         Children =
                         {
-                            new Label { Text = "EURO (EUR)", FontSize = 11, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#64748B") },
-                            new Label { FontSize = 22, FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A") }
+                            new Label().Text("EURO (EUR)").FontSize(11).Bold().TextColor(Color.FromArgb("#64748B")),
+                            new Label().FontSize(22).Bold().TextColor(Color.FromArgb("#0F172A"))
                                 .Bind(Label.TextProperty, nameof(MainViewModel.EurRate), stringFormat: "{0:N4} VES"),
-                            new Label { Text = "Banco Central de Venezuela", FontSize = 9, TextColor = Color.FromArgb("#94A3B8") }
+                            new Label().Text("Banco Central de Venezuela").FontSize(9).TextColor(Color.FromArgb("#94A3B8"))
                         }
                     }
                 }
+                .Padding(16)
                 .Column(1)
             }
         };
@@ -217,30 +209,24 @@ public class MainPage : ContentPage
             StrokeShape = new RoundRectangle { CornerRadius = 6 },
             Stroke = Color.FromArgb("#E2E8F0"),
             BackgroundColor = Colors.White,
-            Padding = 16,
             Content = new VerticalStackLayout
             {
                 Spacing = 10,
                 Children =
                 {
-                    new Label
-                    {
-                        Text = "Consultar fecha anterior",
-                        FontSize = 13,
-                        FontAttributes = FontAttributes.Bold,
-                        TextColor = Color.FromArgb("#0F172A")
-                    },
-                    new DatePicker
-                    {
-                        Format = "dd/MM/yyyy",
-                        MaximumDate = DateTime.Today,
-                        TextColor = Color.FromArgb("#0F172A"),
-                        BackgroundColor = Color.FromArgb("#F1F5F9") // slate-100
-                    }
-                    .Bind(DatePicker.DateProperty, nameof(MainViewModel.SelectedDate), BindingMode.TwoWay)
+                    new Label()
+                        .Text("Consultar fecha anterior")
+                        .FontSize(13)
+                        .Bold()
+                        .TextColor(Color.FromArgb("#0F172A")),
+                    new DatePicker { Format = "dd/MM/yyyy", MaximumDate = DateTime.Today }
+                        .TextColor(Color.FromArgb("#0F172A"))
+                        .BackgroundColor(Color.FromArgb("#F1F5F9")) // slate-100
+                        .Bind(DatePicker.DateProperty, nameof(MainViewModel.SelectedDate), BindingMode.TwoWay)
                 }
             }
-        };
+        }
+        .Padding(16);
     }
 
     private View CreateConverterSection()
@@ -250,19 +236,16 @@ public class MainPage : ContentPage
             StrokeShape = new RoundRectangle { CornerRadius = 6 },
             Stroke = Color.FromArgb("#E2E8F0"),
             BackgroundColor = Colors.White,
-            Padding = 20,
             Content = new VerticalStackLayout
             {
                 Spacing = 16,
                 Children =
                 {
-                    new Label
-                    {
-                        Text = "Conversor de monedas",
-                        FontSize = 14,
-                        FontAttributes = FontAttributes.Bold,
-                        TextColor = Color.FromArgb("#0F172A")
-                    },
+                    new Label()
+                        .Text("Conversor de monedas")
+                        .FontSize(14)
+                        .Bold()
+                        .TextColor(Color.FromArgb("#0F172A")),
 
                     // Selector de Moneda (USD / EUR)
                     new Grid
@@ -271,14 +254,28 @@ public class MainPage : ContentPage
                         ColumnSpacing = 10,
                         Children =
                         {
-                            new Button { Text = "Dolar (USD)", CornerRadius = 6, HeightRequest = 40, Command = _viewModel.SelectCurrencyCommand, CommandParameter = "USD" }
+                            new Button
+                                {
+                                    CornerRadius = 6,
+                                    HeightRequest = 40,
+                                    Command = _viewModel.SelectCurrencyCommand,
+                                    CommandParameter = "USD"
+                                }
+                                .Text("Dolar (USD)")
                                 .Bind(Button.BackgroundColorProperty, nameof(MainViewModel.SelectedCurrency),
                                     convert: (string? curr) => curr == "USD" ? Color.FromArgb("#0F172A") : Color.FromArgb("#F1F5F9"))
                                 .Bind(Button.TextColorProperty, nameof(MainViewModel.SelectedCurrency),
                                     convert: (string? curr) => curr == "USD" ? Colors.White : Color.FromArgb("#475569"))
                                 .Column(0),
 
-                            new Button { Text = "Euro (EUR)", CornerRadius = 6, HeightRequest = 40, Command = _viewModel.SelectCurrencyCommand, CommandParameter = "EUR" }
+                            new Button
+                                {
+                                    CornerRadius = 6,
+                                    HeightRequest = 40,
+                                    Command = _viewModel.SelectCurrencyCommand,
+                                    CommandParameter = "EUR"
+                                }
+                                .Text("Euro (EUR)")
                                 .Bind(Button.BackgroundColorProperty, nameof(MainViewModel.SelectedCurrency),
                                     convert: (string? curr) => curr == "EUR" ? Color.FromArgb("#0F172A") : Color.FromArgb("#F1F5F9"))
                                 .Bind(Button.TextColorProperty, nameof(MainViewModel.SelectedCurrency),
@@ -294,43 +291,28 @@ public class MainPage : ContentPage
                         ColumnSpacing = 10,
                         Children =
                         {
-                            new Entry
-                            {
-                                Placeholder = "Ingrese monto",
-                                PlaceholderColor = Color.FromArgb("#94A3B8"),
-                                TextColor = Color.FromArgb("#0F172A"),
-                                Keyboard = Keyboard.Numeric,
-                                BackgroundColor = Color.FromArgb("#F1F5F9"),
-                                HeightRequest = 42
-                            }
-                            .Bind(Entry.TextProperty, nameof(MainViewModel.AmountText), BindingMode.TwoWay)
-                            .Column(0),
+                            new Entry { Keyboard = Keyboard.Numeric, HeightRequest = 42 }
+                                .Placeholder("Ingrese monto")
+                                .PlaceholderColor(Color.FromArgb("#94A3B8"))
+                                .TextColor(Color.FromArgb("#0F172A"))
+                                .BackgroundColor(Color.FromArgb("#F1F5F9"))
+                                .Bind(Entry.TextProperty, nameof(MainViewModel.AmountText), BindingMode.TwoWay)
+                                .Column(0),
 
-                            new Button
-                            {
-                                Text = "⎘",
-                                FontSize = 14,
-                                TextColor = Color.FromArgb("#475569"),
-                                BackgroundColor = Color.FromArgb("#F1F5F9"),
-                                HeightRequest = 42,
-                                WidthRequest = 42,
-                                CornerRadius = 6,
-                                Command = _viewModel.CopyAmountToConvertCommand
-                            }
-                            .Column(1),
+                            new Button { CornerRadius = 6, HeightRequest = 42, WidthRequest = 42, Command = _viewModel.CopyAmountToConvertCommand }
+                                .Text("⎘")
+                                .FontSize(14)
+                                .TextColor(Color.FromArgb("#475569"))
+                                .BackgroundColor(Color.FromArgb("#F1F5F9"))
+                                .Column(1),
 
-                            new Button
-                            {
-                                CornerRadius = 6,
-                                TextColor = Colors.White,
-                                BackgroundColor = Color.FromArgb("#0F172A"),
-                                HeightRequest = 42,
-                                FontAttributes = FontAttributes.Bold,
-                                Command = _viewModel.ToggleDirectionCommand
-                            }
-                            .Bind(Button.TextProperty, nameof(MainViewModel.IsToVes),
-                                convert: (bool toVes) => toVes ? "Divisa a VES" : "VES a Divisa")
-                            .Column(2)
+                            new Button { CornerRadius = 6, HeightRequest = 42, Command = _viewModel.ToggleDirectionCommand }
+                                .TextColor(Colors.White)
+                                .BackgroundColor(Color.FromArgb("#0F172A"))
+                                .Bold()
+                                .Bind(Button.TextProperty, nameof(MainViewModel.IsToVes),
+                                    convert: (bool toVes) => toVes ? "Divisa a VES" : "VES a Divisa")
+                                .Column(2)
                         }
                     },
 
@@ -339,7 +321,6 @@ public class MainPage : ContentPage
                     {
                         StrokeShape = new RoundRectangle { CornerRadius = 6 },
                         BackgroundColor = Color.FromArgb("#F1F5F9"),
-                        Padding = 12,
                         Content = new Grid
                         {
                             ColumnDefinitions = Columns.Define(Star, Auto),
@@ -351,36 +332,36 @@ public class MainPage : ContentPage
                                     Spacing = 4,
                                     Children =
                                     {
-                                        new Label { Text = "RESULTADO ESTIMADO", FontSize = 9, TextColor = Color.FromArgb("#64748B"), HorizontalTextAlignment = TextAlignment.Center },
-                                        new Label
-                                        {
-                                            FontSize = 24,
-                                            FontAttributes = FontAttributes.Bold,
-                                            TextColor = Color.FromArgb("#0F172A")
-                                        }
-                                        .Bind(Label.TextProperty, nameof(MainViewModel.ConversionResult))
+                                        new Label().Text("RESULTADO ESTIMADO").FontSize(9).TextColor(Color.FromArgb("#64748B")).TextCenterHorizontal(),
+                                        new Label()
+                                            .FontSize(24)
+                                            .Bold()
+                                            .TextColor(Color.FromArgb("#0F172A"))
+                                            .Bind(Label.TextProperty, nameof(MainViewModel.ConversionResult))
                                     }
                                 }
                                 .Column(0),
 
                                 new Button
-                                {
-                                    Text = "⎘",
-                                    FontSize = 16,
-                                    TextColor = Color.FromArgb("#475569"),
-                                    BackgroundColor = Colors.Transparent,
-                                    HeightRequest = 40,
-                                    WidthRequest = 40,
-                                    Command = _viewModel.CopyResultCommand
-                                }
-                                .Column(1)
-                                .CenterVertical()
+                                    {
+                                        BackgroundColor = Colors.Transparent,
+                                        HeightRequest = 40,
+                                        WidthRequest = 40,
+                                        Command = _viewModel.CopyResultCommand
+                                    }
+                                    .Text("⎘")
+                                    .FontSize(16)
+                                    .TextColor(Color.FromArgb("#475569"))
+                                    .Column(1)
+                                    .CenterVertical()
                             }
                         }
                     }
+                    .Padding(12)
                 }
             }
-        };
+        }
+        .Padding(20);
     }
 
     private View CreateHistorySection()
@@ -390,21 +371,18 @@ public class MainPage : ContentPage
             Spacing = 12,
             Children =
             {
-                new Label
-                {
-                    Text = "Historial reciente",
-                    FontSize = 14,
-                    FontAttributes = FontAttributes.Bold,
-                    TextColor = Color.FromArgb("#0F172A"),
-                    Margin = new Thickness(0, 8, 0, 0)
-                },
+                new Label()
+                    .Text("Historial reciente")
+                    .FontSize(14)
+                    .Bold()
+                    .TextColor(Color.FromArgb("#0F172A"))
+                    .Margin(new Thickness(0, 8, 0, 0)),
 
                 new Border
                 {
                     StrokeShape = new RoundRectangle { CornerRadius = 6 },
                     Stroke = Color.FromArgb("#E2E8F0"),
                     BackgroundColor = Colors.White,
-                    Padding = 0,
                     Content = new VerticalStackLayout
                     {
                         Children =
@@ -417,9 +395,9 @@ public class MainPage : ContentPage
                                 ColumnDefinitions = Columns.Define(Star, Star, Star),
                                 Children =
                                 {
-                                    new Label { Text = "Fecha", FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A"), FontSize = 12 }.Column(0),
-                                    new Label { Text = "USD (VES)", FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A"), FontSize = 12, HorizontalTextAlignment = TextAlignment.End }.Column(1),
-                                    new Label { Text = "EUR (VES)", FontAttributes = FontAttributes.Bold, TextColor = Color.FromArgb("#0F172A"), FontSize = 12, HorizontalTextAlignment = TextAlignment.End }.Column(2)
+                                    new Label().Text("Fecha").Bold().TextColor(Color.FromArgb("#0F172A")).FontSize(12).Column(0),
+                                    new Label().Text("USD (VES)").Bold().TextColor(Color.FromArgb("#0F172A")).FontSize(12).TextEnd().Column(1),
+                                    new Label().Text("EUR (VES)").Bold().TextColor(Color.FromArgb("#0F172A")).FontSize(12).TextEnd().Column(2)
                                 }
                             },
 
@@ -440,11 +418,13 @@ public class MainPage : ContentPage
                                                     convert: (DateTime date) => date.ToString("dd/MM/yyyy"))
                                                 .Column(0),
 
-                                            new Label { TextColor = Color.FromArgb("#0F172A"), FontSize = 12, HorizontalTextAlignment = TextAlignment.End }
+                                            new Label { TextColor = Color.FromArgb("#0F172A"), FontSize = 12 }
+                                                .TextEnd()
                                                 .Bind(Label.TextProperty, nameof(ExchangeRate.UsdRate), stringFormat: "{0:N2}")
                                                 .Column(1),
 
-                                            new Label { TextColor = Color.FromArgb("#0F172A"), FontSize = 12, HorizontalTextAlignment = TextAlignment.End }
+                                            new Label { TextColor = Color.FromArgb("#0F172A"), FontSize = 12 }
+                                                .TextEnd()
                                                 .Bind(Label.TextProperty, nameof(ExchangeRate.EurRate), stringFormat: "{0:N2}")
                                                 .Column(2)
                                         }
@@ -455,6 +435,7 @@ public class MainPage : ContentPage
                         }
                     }
                 }
+                .Padding(0)
             }
         };
     }
@@ -478,22 +459,20 @@ public class MainPage : ContentPage
                     Children =
                     {
                         new ActivityIndicator
-                        {
-                            Color = Color.FromArgb("#0F172A"),
-                            HeightRequest = 44,
-                            WidthRequest = 44,
-                            HorizontalOptions = LayoutOptions.Center
-                        }
-                        .Bind(ActivityIndicator.IsRunningProperty, nameof(MainViewModel.IsBusy)),
+                            {
+                                Color = Color.FromArgb("#0F172A"),
+                                HeightRequest = 44,
+                                WidthRequest = 44
+                            }
+                            .CenterHorizontal()
+                            .Bind(ActivityIndicator.IsRunningProperty, nameof(MainViewModel.IsBusy)),
 
-                        new Label
-                        {
-                            TextColor = Color.FromArgb("#334155"),
-                            FontSize = 13,
-                            FontAttributes = FontAttributes.Bold,
-                            HorizontalTextAlignment = TextAlignment.Center
-                        }
-                        .Bind(Label.TextProperty, nameof(MainViewModel.StatusMessage))
+                        new Label()
+                            .TextColor(Color.FromArgb("#334155"))
+                            .FontSize(13)
+                            .Bold()
+                            .TextCenterHorizontal()
+                            .Bind(Label.TextProperty, nameof(MainViewModel.StatusMessage))
                     }
                 }
             }

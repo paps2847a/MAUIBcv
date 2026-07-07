@@ -7,7 +7,7 @@ using BcvExchangeApp.Models;
 
 namespace BcvExchangeApp.Services;
 
-public class BcvScraperService
+public partial class BcvScraperService
 {
     private const string BcvUrl = "https://www.bcv.org.ve/";
     private readonly HttpClient _httpClient;
@@ -35,7 +35,7 @@ public class BcvScraperService
             string html = await _httpClient.GetStringAsync(BcvUrl);
 
             // 1. Extraer la tasa del Dólar
-            var usdMatch = Regex.Match(html, @"id=""dolar""[\s\S]*?<strong[^>]*?>([\s\S]*?)<\/strong>");
+            var usdMatch = DolarRegex().Match(html);
             if (!usdMatch.Success)
             {
                 throw new Exception("No se pudo encontrar el contenedor del Dólar en la página.");
@@ -47,7 +47,7 @@ public class BcvScraperService
             }
 
             // 2. Extraer la tasa del Euro
-            var eurMatch = Regex.Match(html, @"id=""euro""[\s\S]*?<strong[^>]*?>([\s\S]*?)<\/strong>");
+            var eurMatch = EuroRegex().Match(html);
             if (!eurMatch.Success)
             {
                 throw new Exception("No se pudo encontrar el contenedor del Euro en la página.");
@@ -60,7 +60,7 @@ public class BcvScraperService
 
             // 3. Extraer la fecha valor (Fecha de vigencia)
             // Estructura: <span class="date-display-single" property="dc:date" datatype="xsd:dateTime" content="2026-06-16T00:00:00-04:00">
-            var dateMatch = Regex.Match(html, @"date-display-single""[^>]*?content=""([^""]+)""");
+            var dateMatch = DateRegex().Match(html);
             DateTime dateValue = DateTime.Today; // Fallback
             if (dateMatch.Success)
             {
@@ -85,4 +85,13 @@ public class BcvScraperService
             throw; // Propagar para que el ViewModel lo maneje
         }
     }
+
+    [GeneratedRegex(@"id=""dolar""[\s\S]*?<strong[^>]*?>([\s\S]*?)<\/strong>")]
+    private static partial Regex DolarRegex();
+
+    [GeneratedRegex(@"id=""euro""[\s\S]*?<strong[^>]*?>([\s\S]*?)<\/strong>")]
+    private static partial Regex EuroRegex();
+
+    [GeneratedRegex(@"date-display-single""[^>]*?content=""([^""]+)""")]
+    private static partial Regex DateRegex();
 }

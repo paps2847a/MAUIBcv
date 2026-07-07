@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Maui.ApplicationModel;
@@ -26,61 +23,49 @@ public partial class MainViewModel : ObservableObject
     private bool _isInitialized = false;
     private readonly object _initLock = new();
 
-    // Backing fields with Source Generator attributes
     [ObservableProperty]
-    private bool _isBusy;
+    public partial bool IsBusy { get; set; }
 
     [ObservableProperty]
-    private string _statusMessage = string.Empty;
+    public partial string StatusMessage { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private double _usdRate;
+    public partial double UsdRate { get; set; }
 
     [ObservableProperty]
-    private double _eurRate;
-
-    private DateTime _selectedDate;
-    public DateTime SelectedDate
-    {
-        get => _selectedDate;
-        set
-        {
-            if (SetProperty(ref _selectedDate, value))
-            {
-                FormattedDate = value.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
-                Task.Run(() => LoadRatesForDateAsync(value));
-            }
-        }
-    }
+    public partial double EurRate { get; set; }
 
     [ObservableProperty]
-    private string _formattedDate = string.Empty;
+    public partial DateTime SelectedDate { get; set; }
 
     [ObservableProperty]
-    private string _amountText = "1";
+    public partial string FormattedDate { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _selectedCurrency = "USD";
+    public partial string AmountText { get; set; } = "1";
 
     [ObservableProperty]
-    private bool _isToVes = true;
+    public partial string SelectedCurrency { get; set; } = "USD";
 
     [ObservableProperty]
-    private string _conversionResult = "0.00 VES";
+    public partial bool IsToVes { get; set; } = true;
 
     [ObservableProperty]
-    private IReadOnlyList<ExchangeRate> _history = Array.Empty<ExchangeRate>();
+    public partial string ConversionResult { get; set; } = "0.00 VES";
+
+    [ObservableProperty]
+    public partial IReadOnlyList<ExchangeRate> History { get; set; } = Array.Empty<ExchangeRate>();
 
     public MainViewModel(BcvScraperService scraperService, IServiceProvider serviceProvider)
     {
         _scraperService = scraperService;
         _serviceProvider = serviceProvider;
 
-        // Set initial values (direct backing field assignments)
-        _isBusy = true;
-        _statusMessage = "Conectando al Banco Central...";
-        _selectedDate = DateTime.Today;
-        _formattedDate = DateTime.Today.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
+        // Set initial values using properties
+        IsBusy = true;
+        StatusMessage = "Conectando al Banco Central...";
+        SelectedDate = DateTime.Today;
+        FormattedDate = DateTime.Today.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
     }
 
     private IServiceScope CreateDbScope(out BcvDbContext dbContext)
@@ -96,8 +81,15 @@ public partial class MainViewModel : ObservableObject
     partial void OnAmountTextChanged(string value) => Recalculate();
     partial void OnSelectedCurrencyChanged(string value) => Recalculate();
     partial void OnIsToVesChanged(bool value) => Recalculate();
+    partial void OnSelectedDateChanged(DateTime value)
+    {
+        FormattedDate = value.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
+        if (!IsBusy)
+        {
+            Task.Run(() => LoadRatesForDateAsync(value));
+        }
+    }
 
-    // Initializer
     public async Task InitializeAsync()
     {
         lock (_initLock)
@@ -108,29 +100,6 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
-            await _dbSemaphore.WaitAsync();
-            try
-            {
-                using (CreateDbScope(out var dbContext))
-                {
-                    await dbContext.Database.EnsureCreatedAsync();
-                    await dbContext.Database.ExecuteSqlRawAsync(
-                        "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
-                        "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
-                        "\"Cedula\" TEXT NOT NULL, " +
-                        "\"Phone\" TEXT NOT NULL, " +
-                        "\"BankCode\" TEXT NOT NULL, " +
-                        "\"BankName\" TEXT NOT NULL, " +
-                        "\"CreatedAt\" TEXT NOT NULL" +
-                        ");"
-                    );
-                }
-            }
-            finally
-            {
-                _dbSemaphore.Release();
-            }
-
             await LoadHistoryAsync();
             await FetchRatesAsync();
         }
@@ -186,8 +155,7 @@ public partial class MainViewModel : ObservableObject
                         History = newHistory;
                         UsdRate = scraped.UsdRate;
                         EurRate = scraped.EurRate;
-                        _selectedDate = scraped.Date; // update backing field directly to avoid triggering OnSelectedDateChanged task
-                        OnPropertyChanged(nameof(SelectedDate));
+                        SelectedDate = scraped.Date;
                         FormattedDate = scraped.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
                         SetBusyState(false, $"Tasas actualizadas desde el BCV (Fecha Valor: {scraped.Date:dd/MM/yyyy}).");
                     });
@@ -204,8 +172,7 @@ public partial class MainViewModel : ObservableObject
                         {
                             UsdRate = todayRate.UsdRate;
                             EurRate = todayRate.EurRate;
-                            _selectedDate = todayRate.Date;
-                            OnPropertyChanged(nameof(SelectedDate));
+                            SelectedDate = todayRate.Date;
                             FormattedDate = todayRate.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
                             SetBusyState(false, "Sin conexión. Mostrando tasas guardadas para el día de hoy.");
                         }
@@ -213,28 +180,27 @@ public partial class MainViewModel : ObservableObject
                         {
                             UsdRate = 0;
                             EurRate = 0;
-                            _selectedDate = today;
-                            OnPropertyChanged(nameof(SelectedDate));
+                            SelectedDate = today;
                             FormattedDate = today.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
                             SetBusyState(false, "Sin conexión. No se encontraron tasas registradas para el día de hoy.");
                         }
                     });
                 }
             }
-          }
-          catch (Exception ex)
-          {
-              System.Diagnostics.Debug.WriteLine($"Error en base de datos: {ex.Message}");
-              MainThread.BeginInvokeOnMainThread(() =>
-              {
-                  SetBusyState(false, $"Error de base de datos: {ex.Message}");
-              });
-          }
-          finally
-          {
-              _dbSemaphore.Release();
-          }
-      }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error en base de datos: {ex.Message}");
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                SetBusyState(false, $"Error de base de datos: {ex.Message}");
+            });
+        }
+        finally
+        {
+            _dbSemaphore.Release();
+        }
+    }
 
       [RelayCommand]
       private async Task FetchLatestRatesAsync()
@@ -271,8 +237,7 @@ public partial class MainViewModel : ObservableObject
                     {
                         UsdRate = rate.UsdRate;
                         EurRate = rate.EurRate;
-                        _selectedDate = rate.Date;
-                        OnPropertyChanged(nameof(SelectedDate));
+                        SelectedDate = rate.Date;
                         FormattedDate = rate.Date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
                         SetBusyState(false, $"Mostrando tasas históricas para el {rate.Date:dd/MM/yyyy}.");
                     }
@@ -280,8 +245,7 @@ public partial class MainViewModel : ObservableObject
                     {
                         UsdRate = 0;
                         EurRate = 0;
-                        _selectedDate = date;
-                        OnPropertyChanged(nameof(SelectedDate));
+                        SelectedDate = date;
                         FormattedDate = date.ToString("dd 'de' MMMM, yyyy", new CultureInfo("es-ES"));
                         SetBusyState(false, $"No hay datos guardados para el {date:dd/MM/yyyy}. Presiona Actualizar para intentar buscar online.");
                     }
