@@ -88,11 +88,7 @@ public class Compras : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        // Inicializar de forma diferida tras pintar la UI inicial con retraso para dar tiempo a la transición
-        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(300), () =>
-        {
-            Task.Run(async () => await _viewModel.InitializeAsync());
-        });
+        // Datos pre-cargados en el arranque: no se necesita inicializar aquí
     }
 
     private View CreateHeader()

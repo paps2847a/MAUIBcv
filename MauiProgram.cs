@@ -27,22 +27,44 @@ public static class MauiProgram
 		
 		builder.Services.AddSingleton<BcvScraperService>();
 
+		// ViewModels como Singleton: persisten en memoria y no se recrean al navegar
 		builder.Services.AddSingleton<MainViewModel>();
-		builder.Services.AddSingleton<MainPage>();
 		builder.Services.AddSingleton<PagoMovilViewModel>();
-		builder.Services.AddTransient<PagoMovilPage>();
 		builder.Services.AddSingleton<ComprasViewModel>();
+
+		// Paginas como Singleton: el árbol visual se construye una sola vez en el arranque
+		builder.Services.AddSingleton<MainPage>();
+		builder.Services.AddSingleton<PagoMovilPage>();
 		builder.Services.AddSingleton<Compras>();
 
+		// AppShell en DI para recibir las páginas pre-construidas
+		builder.Services.AddSingleton<AppShell>();
+
 		var app = builder.Build();
-		
-		// Inicializar la base de datos en segundo plano para no bloquear el arranque de la app
-		Task.Run(() => InitializeDatabase(app.Services));
+
+		// Pre-calentar SOLO los ViewModels en background para que los datos estén listos
+		// antes de que el usuario haga clic en cualquier pestaña.
+		// Las páginas (árbol visual) las construye Shell la primera vez que se navega a ellas.
+		_ = Task.Run(async () =>
+		{
+			//await Task.Delay(400); // Dar tiempo al splash screen
+			var mainVm = app.Services.GetRequiredService<MainViewModel>();
+			var pagoMovilVm = app.Services.GetRequiredService<PagoMovilViewModel>();
+			var comprasVm = app.Services.GetRequiredService<ComprasViewModel>();
+
+			await InitializeDatabase(app.Services);
+			
+			await Task.WhenAll(
+				mainVm.InitializeAsync(),
+				pagoMovilVm.InitializeAsync(),
+				comprasVm.InitializeAsync()
+			);
+		});
 
 		return app;
 	}
 
-	private static void InitializeDatabase(IServiceProvider services)
+	private async static Task InitializeDatabase(IServiceProvider services)
 	{
 		try
 		{

@@ -53,11 +53,7 @@ public class PagoMovilPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
-        // // Cargar registros al entrar con retraso para dar tiempo a que termine la animación de transición
-        // Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(300), () =>
-        // {
-        //     Task.Run(async () => await _viewModel.InitializeAsync());
-        // });
+        // Datos pre-cargados en el arranque: no se necesita inicializar aquí
     }
 
     private View CreateHeader()
