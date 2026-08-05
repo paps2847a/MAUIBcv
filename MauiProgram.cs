@@ -117,9 +117,12 @@ public static class MauiProgram
 			);
 
 			// Asegurar que las columnas agregadas existan en la base de datos local
+			try { dbContext.Database.ExecuteSqlRaw("ALTER TABLE \"ExchangeRates\" ADD COLUMN \"UsdtRate\" REAL NOT NULL DEFAULT 0.0;"); } catch { }
 			try { dbContext.Database.ExecuteSqlRaw("ALTER TABLE \"PurchaseRecords\" ADD COLUMN \"ItemsJson\" TEXT NOT NULL DEFAULT '';"); } catch { }
 			try { dbContext.Database.ExecuteSqlRaw("ALTER TABLE \"PurchaseRecords\" ADD COLUMN \"UsdRate\" REAL NOT NULL DEFAULT 0.0;"); } catch { }
 			try { dbContext.Database.ExecuteSqlRaw("ALTER TABLE \"PurchaseRecords\" ADD COLUMN \"EurRate\" REAL NOT NULL DEFAULT 0.0;"); } catch { }
+			try { dbContext.Database.ExecuteSqlRaw("ALTER TABLE \"PurchaseRecords\" ADD COLUMN \"UsdtRate\" REAL NOT NULL DEFAULT 0.0;"); } catch { }
+			try { dbContext.Database.ExecuteSqlRaw("ALTER TABLE \"PurchaseRecords\" ADD COLUMN \"TotalUsdt\" REAL NOT NULL DEFAULT 0.0;"); } catch { }
 		}
 		catch (Exception ex)
 		{

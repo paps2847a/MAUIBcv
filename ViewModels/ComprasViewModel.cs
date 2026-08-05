@@ -49,7 +49,7 @@ public partial class ComprasViewModel : ObservableObject
     public partial string FormPrice { get; set; } = string.Empty;
 
     [ObservableProperty]
-    public partial string FormCurrency { get; set; } = "USD"; // Default to USD
+    public partial string FormCurrency { get; set; } = "USD";
 
     [ObservableProperty]
     public partial string FormQuantityText { get; set; } = "1";
@@ -63,6 +63,9 @@ public partial class ComprasViewModel : ObservableObject
 
     [ObservableProperty]
     public partial double TotalEur { get; set; }
+
+    [ObservableProperty]
+    public partial double TotalUsdt { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HistoryPageText))]
@@ -81,7 +84,7 @@ public partial class ComprasViewModel : ObservableObject
     public string HistoryPageText => $"Página {HistoryPageNumber} de {TotalHistoryPages}";
 
     [ObservableProperty]
-    public partial string ActiveTab { get; set; } = "List"; // "List" or "History"
+    public partial string ActiveTab { get; set; } = "List";
 
     public ComprasViewModel(IServiceProvider serviceProvider)
     {
@@ -159,7 +162,6 @@ public partial class ComprasViewModel : ObservableObject
         }
         else
         {
-            // Carga silenciosa en segundo plano (sin bloquear la interfaz ni encender spinner)
             _ = Task.Run(async () =>
             {
                 await _dbSemaphore.WaitAsync();
@@ -223,7 +225,6 @@ public partial class ComprasViewModel : ObservableObject
         {
             using (CreateDbScope(out var dbContext))
             {
-                // Contar registros totales para calcular paginación
                 int totalCount = await dbContext.PurchaseRecords.CountAsync();
                 int totalPages = (int)Math.Ceiling(totalCount / 5.0);
                 if (totalPages == 0) totalPages = 1;
@@ -308,7 +309,6 @@ public partial class ComprasViewModel : ObservableObject
             }
         }
 
-        // El nombre es opcional. Si está vacío, se asigna "Producto" por defecto
         string nameRaw = FormName ?? string.Empty;
         string name = nameRaw.Trim();
         if (string.IsNullOrWhiteSpace(name))
@@ -344,7 +344,6 @@ public partial class ComprasViewModel : ObservableObject
             _dbSemaphore.Release();
         }
 
-        // Limpiar campos del formulario
         FormName = string.Empty;
         FormPrice = string.Empty;
         FormQuantityText = "1";
@@ -387,7 +386,6 @@ public partial class ComprasViewModel : ObservableObject
             return;
         }
 
-        // Resumen de la compra
         var summaries = ShoppingItems.Select(i => $"{i.Name} ({i.Quantity})");
         string summary = string.Join(", ", summaries);
         if (summary.Length > 250)
@@ -411,10 +409,12 @@ public partial class ComprasViewModel : ObservableObject
             TotalVes = TotalVes,
             TotalUsd = TotalUsd,
             TotalEur = TotalEur,
+            TotalUsdt = TotalUsdt,
             ItemSummary = summary,
             ItemsJson = itemsJson,
             UsdRate = _latestRate?.UsdRate ?? 0.0,
             EurRate = _latestRate?.EurRate ?? 0.0,
+            UsdtRate = _latestRate?.UsdtRate ?? 0.0,
             CreatedAt = DateTime.Now
         };
 
@@ -515,9 +515,11 @@ public partial class ComprasViewModel : ObservableObject
         double ves = 0;
         double usd = 0;
         double eur = 0;
+        double usdt = 0;
 
         double usdRate = _latestRate?.UsdRate ?? 0;
         double eurRate = _latestRate?.EurRate ?? 0;
+        double usdtRate = _latestRate?.UsdtRate ?? 0;
 
         foreach (var item in ShoppingItems)
         {
@@ -527,24 +529,34 @@ public partial class ComprasViewModel : ObservableObject
                 ves += itemTotal;
                 if (usdRate > 0) usd += itemTotal / usdRate;
                 if (eurRate > 0) eur += itemTotal / eurRate;
+                if (usdtRate > 0) usdt += itemTotal / usdtRate;
             }
             else if (item.Currency == "USD")
             {
                 if (usdRate > 0) ves += itemTotal * usdRate;
                 usd += itemTotal;
                 if (eurRate > 0 && usdRate > 0) eur += (itemTotal * usdRate) / eurRate;
+                if (usdtRate > 0 && usdRate > 0) usdt += (itemTotal * usdRate) / usdtRate;
             }
             else if (item.Currency == "EUR")
             {
                 if (eurRate > 0) ves += itemTotal * eurRate;
                 if (usdRate > 0 && eurRate > 0) usd += (itemTotal * eurRate) / usdRate;
                 eur += itemTotal;
+                if (usdtRate > 0 && eurRate > 0) usdt += (itemTotal * eurRate) / usdtRate;
+            }
+            else if (item.Currency == "USDT")
+            {
+                if (usdtRate > 0) ves += itemTotal * usdtRate;
+                if (usdRate > 0 && usdtRate > 0) usd += (itemTotal * usdtRate) / usdRate;
+                if (eurRate > 0 && usdtRate > 0) eur += (itemTotal * usdtRate) / eurRate;
+                usdt += itemTotal;
             }
         }
 
         TotalVes = ves;
         TotalUsd = usd;
         TotalEur = eur;
+        TotalUsdt = usdt;
     }
-
 }
