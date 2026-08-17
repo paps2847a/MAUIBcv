@@ -1,12 +1,8 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.IO;
 using System.Net.Http;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Input;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Maui.ApplicationModel;
@@ -28,34 +24,34 @@ public partial class PagoMovilViewModel : ObservableObject
     private readonly SemaphoreSlim _dbSemaphore = new(1, 1);
 
     [ObservableProperty]
-    private IReadOnlyList<PagoMovilRecord> _records = Array.Empty<PagoMovilRecord>();
+    public partial IReadOnlyList<PagoMovilRecord> Records { get; set; } = Array.Empty<PagoMovilRecord>();
 
     private IReadOnlyList<PagoMovilRecord> _allRecords = Array.Empty<PagoMovilRecord>();
 
     [ObservableProperty]
-    private string _searchQuery = string.Empty;
+    public partial string SearchQuery { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private IReadOnlyList<Bank> _banks = StaticBanks;
+    public partial IReadOnlyList<Bank> Banks { get; set; } = StaticBanks;
 
     [ObservableProperty]
-    private bool _isLoading;
+    public partial bool IsLoading { get; set; }
 
     [ObservableProperty]
-    private string _statusMessage = string.Empty;
+    public partial string StatusMessage { get; set; } = string.Empty;
 
     // Form fields
     [ObservableProperty]
-    private string _formCedula = string.Empty;
+    public partial string FormCedula { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _formPhone = string.Empty;
+    public partial string FormPhone { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private Bank? _formSelectedBank;
+    public partial Bank? FormSelectedBank { get; set; }
 
     [ObservableProperty]
-    private string _formErrorMessage = string.Empty;
+    public partial string FormErrorMessage { get; set; } = string.Empty;
 
     public PagoMovilViewModel(IServiceProvider serviceProvider)
     {
@@ -75,88 +71,37 @@ public partial class PagoMovilViewModel : ObservableObject
         // Limpiar mensaje tras unos segundos de forma asíncrona
         if (!string.IsNullOrEmpty(value))
         {
-            Task.Delay(3000).ContinueWith(_ => StatusMessage = string.Empty);
+            Task.Run(async () =>
+            {
+                await Task.Delay(3000);
+                MainThread.BeginInvokeOnMainThread(() => StatusMessage = string.Empty);
+            });
         }
     }
 
     partial void OnSearchQueryChanged(string value) => ApplyFilter();
 
-    // Logic
     public async Task InitializeAsync()
     {
-        MainThread.BeginInvokeOnMainThread(() => IsLoading = true);
-        await _dbSemaphore.WaitAsync();
-        try
-        {
-            using (CreateDbScope(out var dbContext))
-            {
-                await dbContext.Database.EnsureCreatedAsync();
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
-                    "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
-                    "\"Cedula\" TEXT NOT NULL, " +
-                    "\"Phone\" TEXT NOT NULL, " +
-                    "\"BankCode\" TEXT NOT NULL, " +
-                    "\"BankName\" TEXT NOT NULL, " +
-                    "\"CreatedAt\" TEXT NOT NULL" +
-                    ");"
-                );
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error al asegurar tabla PagoMovilRecords: {ex.Message}");
-        }
-        finally
-        {
-            _dbSemaphore.Release();
-        }
-
-        await LoadBanksAsync();
-        await LoadRecordsAsync();
-    }
-
-    private async Task LoadBanksAsync()
-    {
-        try
-        {
-            using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(5);
-            string csvData = await client.GetStringAsync("https://gist.githubusercontent.com/arodu/af242b5e3d7fc4e4fb2710c76ec41fae/raw/06b4abdb0225430059f957f07d84c0c588c0c996/banks_venezuela.csv");
-            
-            var list = new List<Bank>();
-            var lines = csvData.Split(new[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-            for (int i = 1; i < lines.Length; i++)
-            {
-                var line = lines[i].Trim();
-                if (string.IsNullOrWhiteSpace(line)) continue;
-                var parts = line.Split(',', 2);
-                if (parts.Length == 2)
-                {
-                    string code = parts[0].Trim().Replace("\"", "");
-                    string name = parts[1].Trim().Replace("\"", "");
-                    list.Add(new Bank(code, name));
-                }
-            }
-
-            if (list.Count > 0)
-            {
-                MainThread.BeginInvokeOnMainThread(() => Banks = list);
-                return;
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"Error al descargar CSV de bancos: {ex.Message}");
-        }
-
         MainThread.BeginInvokeOnMainThread(() => Banks = StaticBanks);
+        
+        // Si ya tenemos registros cargados, actualizamos de forma silenciosa en segundo plano
+        if (Records != null && Records.Count > 0)
+        {
+            _ = Task.Run(async () => await LoadRecordsAsync(silent: true));
+            return;
+        }
+
+        await LoadRecordsAsync(silent: false);
     }
 
     [RelayCommand]
-    public async Task LoadRecordsAsync()
+    public async Task LoadRecordsAsync(bool silent = false)
     {
-        MainThread.BeginInvokeOnMainThread(() => IsLoading = true);
+        if (!silent)
+        {
+            MainThread.BeginInvokeOnMainThread(() => IsLoading = true);
+        }
 
         await _dbSemaphore.WaitAsync();
         try
@@ -164,8 +109,8 @@ public partial class PagoMovilViewModel : ObservableObject
             using (CreateDbScope(out var dbContext))
             {
                 var list = await dbContext.PagoMovilRecords
-                    .OrderByDescending(r => r.CreatedAt)
-                    .ToListAsync();
+                            .OrderByDescending(r => r.CreatedAt)
+                            .ToListAsync();
 
                 MainThread.BeginInvokeOnMainThread(() =>
                 {
@@ -248,18 +193,6 @@ public partial class PagoMovilViewModel : ObservableObject
         {
             using (CreateDbScope(out var dbContext))
             {
-                // Asegurar tabla
-                await dbContext.Database.ExecuteSqlRawAsync(
-                    "CREATE TABLE IF NOT EXISTS \"PagoMovilRecords\" (" +
-                    "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
-                    "\"Cedula\" TEXT NOT NULL, " +
-                    "\"Phone\" TEXT NOT NULL, " +
-                    "\"BankCode\" TEXT NOT NULL, " +
-                    "\"BankName\" TEXT NOT NULL, " +
-                    "\"CreatedAt\" TEXT NOT NULL" +
-                    ");"
-                );
-
                 exists = await dbContext.PagoMovilRecords.AnyAsync(r =>
                     r.BankCode == FormSelectedBank.Code &&
                     r.Phone == FormPhone.Trim() &&

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Threading;
@@ -25,64 +24,67 @@ public partial class ComprasViewModel : ObservableObject
     private readonly object _initLock = new();
 
     [ObservableProperty]
-    private bool _isLoading;
+    public partial bool IsLoading { get; set; }
 
     [ObservableProperty]
-    private string _statusMessage = string.Empty;
+    public partial string StatusMessage { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private IReadOnlyList<ShoppingItem> _shoppingItems = Array.Empty<ShoppingItem>();
+    public partial IReadOnlyList<ShoppingItem> ShoppingItems { get; set; } = Array.Empty<ShoppingItem>();
 
     [ObservableProperty]
-    private IReadOnlyList<PurchaseRecord> _purchaseHistory = Array.Empty<PurchaseRecord>();
+    public partial IReadOnlyList<PurchaseRecord> PurchaseHistory { get; set; } = Array.Empty<PurchaseRecord>();
 
     [ObservableProperty]
-    private IReadOnlyList<PagoMovilRecord> _pagoMovilList = Array.Empty<PagoMovilRecord>();
+    public partial IReadOnlyList<PagoMovilRecord> PagoMovilList { get; set; } = Array.Empty<PagoMovilRecord>();
 
     [ObservableProperty]
-    private PagoMovilRecord? _selectedPagoMovil;
+    public partial PagoMovilRecord? SelectedPagoMovil { get; set; }
 
     // Form fields
     [ObservableProperty]
-    private string _formName = string.Empty;
+    public partial string FormName { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _formPrice = string.Empty;
+    public partial string FormPrice { get; set; } = string.Empty;
 
     [ObservableProperty]
-    private string _formCurrency = "USD"; // Default to USD
+    public partial string FormCurrency { get; set; } = "USD";
 
     [ObservableProperty]
-    private string _formQuantityText = "1";
+    public partial string FormQuantityText { get; set; } = "1";
 
     // Totals
     [ObservableProperty]
-    private double _totalVes;
+    public partial double TotalVes { get; set; }
 
     [ObservableProperty]
-    private double _totalUsd;
+    public partial double TotalUsd { get; set; }
 
     [ObservableProperty]
-    private double _totalEur;
+    public partial double TotalEur { get; set; }
+
+    [ObservableProperty]
+    public partial double TotalUsdt { get; set; }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HistoryPageText))]
-    private int _historyPageNumber = 1;
+    public partial int HistoryPageNumber { get; set; } = 1;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HistoryPageText))]
-    private int _totalHistoryPages = 1;
+    public partial int TotalHistoryPages { get; set; } = 1;
 
     [ObservableProperty]
-    private bool _hasPreviousHistoryPage;
+    public partial bool HasPreviousHistoryPage { get; set; }
 
     [ObservableProperty]
-    private bool _hasNextHistoryPage;
+    public partial bool HasNextHistoryPage { get; set; }
 
     public string HistoryPageText => $"Página {HistoryPageNumber} de {TotalHistoryPages}";
 
     [ObservableProperty]
-    private string _activeTab = "List"; // "List" or "History"
+    public partial string ActiveTab { get; set; } = "List";
 
     public ComprasViewModel(IServiceProvider serviceProvider)
     {
@@ -100,7 +102,11 @@ public partial class ComprasViewModel : ObservableObject
     {
         if (!string.IsNullOrEmpty(value))
         {
-            Task.Delay(3000).ContinueWith(_ => StatusMessage = string.Empty);
+            Task.Run(async () =>
+            {
+                await Task.Delay(3000);
+                MainThread.BeginInvokeOnMainThread(() => StatusMessage = string.Empty);
+            });
         }
     }
 
@@ -121,73 +127,6 @@ public partial class ComprasViewModel : ObservableObject
             MainThread.BeginInvokeOnMainThread(() => IsLoading = true);
             try
             {
-                await _dbSemaphore.WaitAsync();
-                try
-                {
-                    using (CreateDbScope(out var dbContext))
-                    {
-                        await dbContext.Database.EnsureCreatedAsync();
-
-                        // Asegurar creación de tablas en bases de datos preexistentes
-                        await dbContext.Database.ExecuteSqlRawAsync(
-                            "CREATE TABLE IF NOT EXISTS \"ShoppingItems\" (" +
-                            "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
-                            "\"Name\" TEXT NOT NULL, " +
-                            "\"Price\" REAL NOT NULL, " +
-                            "\"Currency\" TEXT NOT NULL, " +
-                            "\"Quantity\" INTEGER NOT NULL, " +
-                            "\"CreatedAt\" TEXT NOT NULL" +
-                            ");"
-                        );
-
-                        await dbContext.Database.ExecuteSqlRawAsync(
-                            "CREATE TABLE IF NOT EXISTS \"PurchaseRecords\" (" +
-                            "\"Id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, " +
-                            "\"PurchaseDate\" TEXT NOT NULL, " +
-                            "\"TotalVes\" REAL NOT NULL, " +
-                            "\"TotalUsd\" REAL NOT NULL, " +
-                            "\"TotalEur\" REAL NOT NULL, " +
-                            "\"ItemSummary\" TEXT NOT NULL, " +
-                            "\"ItemsJson\" TEXT NOT NULL DEFAULT '', " +
-                            "\"UsdRate\" REAL NOT NULL DEFAULT 0.0, " +
-                            "\"EurRate\" REAL NOT NULL DEFAULT 0.0, " +
-                            "\"CreatedAt\" TEXT NOT NULL" +
-                            ");"
-                        );
-
-                        // Crear índice en PurchaseDate para optimizar el ordenamiento de paginación
-                        await dbContext.Database.ExecuteSqlRawAsync(
-                            "CREATE INDEX IF NOT EXISTS \"IX_PurchaseRecords_PurchaseDate\" ON \"PurchaseRecords\" (\"PurchaseDate\");"
-                        );
-
-                        try
-                        {
-                            await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE \"PurchaseRecords\" ADD COLUMN \"ItemsJson\" TEXT NOT NULL DEFAULT '';");
-                        }
-                        catch { /* ignorado si ya existe */ }
-
-                        try
-                        {
-                            await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE \"PurchaseRecords\" ADD COLUMN \"UsdRate\" REAL NOT NULL DEFAULT 0.0;");
-                        }
-                        catch { /* ignorado si ya existe */ }
-
-                        try
-                        {
-                            await dbContext.Database.ExecuteSqlRawAsync("ALTER TABLE \"PurchaseRecords\" ADD COLUMN \"EurRate\" REAL NOT NULL DEFAULT 0.0;");
-                        }
-                        catch { /* ignorado si ya existe */ }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    System.Diagnostics.Debug.WriteLine($"Error al asegurar tablas de compras: {ex.Message}");
-                }
-                finally
-                {
-                    _dbSemaphore.Release();
-                }
-
                 await _dbSemaphore.WaitAsync();
                 try
                 {
@@ -223,7 +162,6 @@ public partial class ComprasViewModel : ObservableObject
         }
         else
         {
-            // Carga silenciosa en segundo plano (sin bloquear la interfaz ni encender spinner)
             _ = Task.Run(async () =>
             {
                 await _dbSemaphore.WaitAsync();
@@ -287,7 +225,6 @@ public partial class ComprasViewModel : ObservableObject
         {
             using (CreateDbScope(out var dbContext))
             {
-                // Contar registros totales para calcular paginación
                 int totalCount = await dbContext.PurchaseRecords.CountAsync();
                 int totalPages = (int)Math.Ceiling(totalCount / 5.0);
                 if (totalPages == 0) totalPages = 1;
@@ -372,7 +309,6 @@ public partial class ComprasViewModel : ObservableObject
             }
         }
 
-        // El nombre es opcional. Si está vacío, se asigna "Producto" por defecto
         string nameRaw = FormName ?? string.Empty;
         string name = nameRaw.Trim();
         if (string.IsNullOrWhiteSpace(name))
@@ -408,7 +344,6 @@ public partial class ComprasViewModel : ObservableObject
             _dbSemaphore.Release();
         }
 
-        // Limpiar campos del formulario
         FormName = string.Empty;
         FormPrice = string.Empty;
         FormQuantityText = "1";
@@ -451,7 +386,6 @@ public partial class ComprasViewModel : ObservableObject
             return;
         }
 
-        // Resumen de la compra
         var summaries = ShoppingItems.Select(i => $"{i.Name} ({i.Quantity})");
         string summary = string.Join(", ", summaries);
         if (summary.Length > 250)
@@ -475,10 +409,12 @@ public partial class ComprasViewModel : ObservableObject
             TotalVes = TotalVes,
             TotalUsd = TotalUsd,
             TotalEur = TotalEur,
+            TotalUsdt = TotalUsdt,
             ItemSummary = summary,
             ItemsJson = itemsJson,
             UsdRate = _latestRate?.UsdRate ?? 0.0,
             EurRate = _latestRate?.EurRate ?? 0.0,
+            UsdtRate = _latestRate?.UsdtRate ?? 0.0,
             CreatedAt = DateTime.Now
         };
 
@@ -579,9 +515,11 @@ public partial class ComprasViewModel : ObservableObject
         double ves = 0;
         double usd = 0;
         double eur = 0;
+        double usdt = 0;
 
         double usdRate = _latestRate?.UsdRate ?? 0;
         double eurRate = _latestRate?.EurRate ?? 0;
+        double usdtRate = _latestRate?.UsdtRate ?? 0;
 
         foreach (var item in ShoppingItems)
         {
@@ -591,24 +529,34 @@ public partial class ComprasViewModel : ObservableObject
                 ves += itemTotal;
                 if (usdRate > 0) usd += itemTotal / usdRate;
                 if (eurRate > 0) eur += itemTotal / eurRate;
+                if (usdtRate > 0) usdt += itemTotal / usdtRate;
             }
             else if (item.Currency == "USD")
             {
                 if (usdRate > 0) ves += itemTotal * usdRate;
                 usd += itemTotal;
                 if (eurRate > 0 && usdRate > 0) eur += (itemTotal * usdRate) / eurRate;
+                if (usdtRate > 0 && usdRate > 0) usdt += (itemTotal * usdRate) / usdtRate;
             }
             else if (item.Currency == "EUR")
             {
                 if (eurRate > 0) ves += itemTotal * eurRate;
                 if (usdRate > 0 && eurRate > 0) usd += (itemTotal * eurRate) / usdRate;
                 eur += itemTotal;
+                if (usdtRate > 0 && eurRate > 0) usdt += (itemTotal * eurRate) / usdtRate;
+            }
+            else if (item.Currency == "USDT")
+            {
+                if (usdtRate > 0) ves += itemTotal * usdtRate;
+                if (usdRate > 0 && usdtRate > 0) usd += (itemTotal * usdtRate) / usdRate;
+                if (eurRate > 0 && usdtRate > 0) eur += (itemTotal * usdtRate) / eurRate;
+                usdt += itemTotal;
             }
         }
 
         TotalVes = ves;
         TotalUsd = usd;
         TotalEur = eur;
+        TotalUsdt = usdt;
     }
-
 }
